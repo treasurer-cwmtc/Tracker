@@ -78,3 +78,29 @@ class ReconRunOut(BaseModel):
 
 class ReconRunDetail(ReconRunOut):
     lines: list[ReconLineOut] = []
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    is_admin: bool
+    active: bool
+    created_at: datetime
+
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+    is_admin: bool = False
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str

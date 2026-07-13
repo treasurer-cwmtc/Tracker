@@ -7,13 +7,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..deps import get_current_user
 from ..models import CategoryRule, ChartOfAccount, ReconLine, ReconRun
 from ..schemas import ReconRunDetail, ReconRunOut
 from ..services.categorizer import Categorizer
 from ..services.parsers import parse_bank_csv, parse_stripe_csv
 from ..services.reconciler import reconcile
 
-router = APIRouter(prefix="/api", tags=["reconcile"])
+router = APIRouter(
+    prefix="/api", tags=["reconcile"], dependencies=[Depends(get_current_user)]
+)
 
 EXPORT_COLUMNS = [
     ("transaction_date", "Transaction Date"),

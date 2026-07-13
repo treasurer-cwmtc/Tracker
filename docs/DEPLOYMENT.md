@@ -52,6 +52,11 @@ POSTGRES_USER=recon
 POSTGRES_PASSWORD=<generate-a-long-random-value>
 POSTGRES_DB=recon
 CORS_ORIGINS=http://<your-server-ip-or-domain>:8080
+
+# Auth — CHANGE THESE before exposing publicly
+SECRET_KEY=<a-long-random-string>
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=<a-strong-password>
 ```
 
 > `.env` is git-ignored — never commit it.
@@ -173,11 +178,12 @@ Automate with a cron entry, e.g. nightly:
 
 ## 8. Security notes
 
-- The POC has **no authentication**. Before exposing it publicly, add auth (e.g.
-  put Basic Auth on the Caddy site, or add app-level login) — donor data is
-  sensitive.
+- The app requires **login (per-user accounts)**. On first startup a seed admin is
+  created from `ADMIN_USERNAME` / `ADMIN_PASSWORD` (defaults `admin` / `changeme`).
+  **Change these before exposing publicly**, and set a strong random `SECRET_KEY`
+  (it signs the login tokens). The admin can add more users in the **Users** tab.
 - Keep the VPS patched (`unattended-upgrades`).
-- Rotate the `POSTGRES_PASSWORD` if it is ever exposed.
+- Rotate the `POSTGRES_PASSWORD` and `SECRET_KEY` if they are ever exposed.
 
 ---
 

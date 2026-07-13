@@ -138,6 +138,7 @@ account.
 
 ### Data model (tables)
 
+- `users` — login accounts (username, PBKDF2 password hash, is_admin, active).
 - `chart_of_accounts` — the category master.
 - `category_rules` — editable rules (`stripe_fund` | `bank_keyword`).
 - `recon_runs` — one row per reconciliation run (counts, filenames).
@@ -145,11 +146,15 @@ account.
 
 ### API surface
 
+- `POST /api/auth/login` (form) → JWT; `GET /api/auth/me`;
+  `POST /api/auth/change-password`; admin-only `GET/POST/DELETE /api/auth/users`
 - `POST /api/reconcile` (multipart: `bank_file`, `stripe_file`) → run + lines
 - `GET  /api/runs`, `GET /api/runs/{id}`, `GET /api/runs/{id}/export.csv`
 - `GET/POST/PUT/DELETE /api/rules`
 - `GET  /api/accounts`, `POST /api/accounts/upload`
-- `GET  /api/health`
+- `GET  /api/health` (public)
+
+All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
 
 ---
 
@@ -167,9 +172,17 @@ account.
 - Exploded amounts use Stripe **Net**; confirm whether the bookkeeping wants gross
   + a separate Stripe-fee expense line instead.
 - Seed keyword/fund rules are guesses — review on the Rules tab.
-- Not yet built (candidate next steps): auth/login for the VPS, saved run history
-  UI, roster-based donor normalization, direct export to the accounting system,
-  automated Stripe/Chase pulls instead of manual CSV upload.
+- Not yet built (candidate next steps): saved run history UI, roster-based donor
+  normalization, direct export to the accounting system, automated Stripe/Chase
+  pulls instead of manual CSV upload, CI/CD auto-deploy to the VPS.
+
+### Authentication (built)
+
+- Per-user accounts with PBKDF2-hashed passwords; JWT bearer tokens
+  (`SECRET_KEY`-signed, 12h expiry). Seed admin from `ADMIN_USERNAME` /
+  `ADMIN_PASSWORD` on first startup; admins manage users in the **Users** tab.
+  Frontend stores the token in `localStorage` and redirects to a login screen on
+  401.
 
 ---
 

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
-from .routers import coa, reconcile, rules
+from .routers import auth, coa, reconcile, rules
 from .seed import seed
 
 settings = get_settings()
@@ -29,6 +29,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(reconcile.router)
 app.include_router(rules.router)
 app.include_router(coa.router)

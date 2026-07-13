@@ -10,7 +10,9 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import CategoryRule, ChartOfAccount
+from .config import get_settings
+from .models import CategoryRule, ChartOfAccount, User
+from .security import hash_password
 
 COA_CSV = Path(__file__).parent / "data" / "chart_of_accounts.csv"
 
@@ -66,6 +68,18 @@ def load_chart_of_accounts_from_csv(db: Session, text: str) -> int:
 
 
 def seed(db: Session) -> None:
+    settings = get_settings()
+
+    if db.scalar(select(User).limit(1)) is None:
+        db.add(
+            User(
+                username=settings.admin_username,
+                password_hash=hash_password(settings.admin_password),
+                is_admin=True,
+            )
+        )
+        db.commit()
+
     if db.scalar(select(ChartOfAccount).limit(1)) is None and COA_CSV.exists():
         load_chart_of_accounts_from_csv(db, COA_CSV.read_text(encoding="utf-8"))
 

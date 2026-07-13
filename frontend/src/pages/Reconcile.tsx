@@ -107,7 +107,16 @@ export default function Reconcile() {
               {lines.length} lines · subtotal{" "}
               <b>${total.toFixed(2)}</b>
             </span>
-            <a className="btn secondary" href={api.exportUrl(run.id)} download>
+            <a
+              className="btn secondary"
+              href={api.exportUrl(run.id)}
+              onClick={(e) => {
+                e.preventDefault();
+                api.downloadExport(run.id).catch((err) =>
+                  setError((err as Error).message)
+                );
+              }}
+            >
               Download CSV
             </a>
           </div>

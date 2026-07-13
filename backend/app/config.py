@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     # when matching on amount is ambiguous.
     payout_match_window_days: int = 7
 
+    # --- Auth ---
+    # SECRET_KEY signs JWTs. MUST be overridden in production (set in .env).
+    secret_key: str = "dev-insecure-change-me"
+    access_token_expire_minutes: int = 60 * 12  # 12 hours
+    # Seed admin (created on first startup if no users exist).
+    admin_username: str = "admin"
+    admin_password: str = "changeme"
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

@@ -3,11 +3,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..deps import get_current_user
 from ..models import ChartOfAccount
 from ..schemas import ChartOfAccountOut
 from ..seed import load_chart_of_accounts_from_csv
 
-router = APIRouter(prefix="/api/accounts", tags=["accounts"])
+router = APIRouter(
+    prefix="/api/accounts", tags=["accounts"], dependencies=[Depends(get_current_user)]
+)
 
 
 @router.get("", response_model=list[ChartOfAccountOut])

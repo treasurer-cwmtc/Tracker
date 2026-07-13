@@ -37,6 +37,14 @@ startup. See **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** for the full VPS
 (headless) setup, HTTPS, boot-on-startup, and backups. See
 **[docs/PROJECT.md](docs/PROJECT.md)** for the project knowledge base.
 
+## Authentication
+
+The app requires login. A seed admin is created on first startup from
+`ADMIN_USERNAME` / `ADMIN_PASSWORD` (defaults `admin` / `changeme` — **change
+these**, and set a strong `SECRET_KEY`, before exposing publicly). Admins add more
+users in the **Users** tab. All API endpoints except `/api/health` and
+`/api/auth/login` require a Bearer token.
+
 ## Run locally without Docker (POC)
 
 **Backend** (uses a local SQLite file `recon.db`):

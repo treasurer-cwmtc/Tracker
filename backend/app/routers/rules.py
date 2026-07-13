@@ -3,10 +3,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..deps import get_current_user
 from ..models import CategoryRule
 from ..schemas import CategoryRuleCreate, CategoryRuleOut, CategoryRuleUpdate
 
-router = APIRouter(prefix="/api/rules", tags=["rules"])
+router = APIRouter(
+    prefix="/api/rules", tags=["rules"], dependencies=[Depends(get_current_user)]
+)
 
 VALID_TYPES = {"bank_keyword", "stripe_fund"}
 
