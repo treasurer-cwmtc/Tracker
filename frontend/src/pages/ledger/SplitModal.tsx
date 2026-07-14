@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ChartAccount } from "../../api/accounts";
-import { ledgerApi, ReconciliationEntry, SplitLine } from "../../api/ledger";
+import { LedgerEntry, SplitLine } from "./types";
 
 interface DraftLine {
   description: string;
@@ -12,14 +12,15 @@ function blankLine(): DraftLine {
   return { description: "", account_no: "", amount: "" };
 }
 
-/** Splits one aggregated bank line (e.g. a lump deposit slip covering
- * several checks) into multiple Reconciliation entries. The original line
- * isn't deleted server-side - it's just hidden, so a future re-import of
- * the same statement won't resurrect it as a duplicate. */
+/** Splits one aggregated line (e.g. a lump bank deposit or a lump
+ * reimbursement covering several people/purchases) into multiple entries.
+ * Shared by Reconciliation and Accrual - `onSubmit` is whichever ledger's
+ * split endpoint the caller wires up. */
 export default function SplitModal(props: {
-  entry: ReconciliationEntry;
+  entry: LedgerEntry;
   accounts: ChartAccount[];
-  onSplit: (children: ReconciliationEntry[]) => void;
+  onSubmit: (lines: SplitLine[]) => Promise<LedgerEntry[]>;
+  onSuccess: (children: LedgerEntry[]) => void;
   onClose: () => void;
 }) {
   const e = props.entry;
@@ -58,8 +59,8 @@ export default function SplitModal(props: {
         account_no: l.account_no,
         amount: Number(l.amount),
       }));
-      const children = await ledgerApi.split(e.id, payload);
-      props.onSplit(children);
+      const children = await props.onSubmit(payload);
+      props.onSuccess(children);
     } catch (err) {
       setError((err as Error).message);
     } finally {
