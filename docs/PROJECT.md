@@ -181,6 +181,12 @@ All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.
   the Google Picker so a user can link an existing Drive file (stores `fileId` +
   `webViewLink`, not a copy). Needs a Google Cloud OAuth client registered to the
   church domain — no Google credentials exist in the repo yet. See issue #8.
+- **Planned: Google Sign-In** — login via the `crosswaymtc.org` Google Workspace
+  (nonprofit account), consent screen restricted to that domain so only church
+  accounts can sign in. Can reuse the same OAuth client as the Drive Picker work
+  above. Open question: replaces or supplements the existing username/password +
+  JWT auth (`backend/app/security.py`) — needs a decision before implementation.
+  See issue #9.
 
 ### Authentication (built)
 
