@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Config tab)
+**Last updated:** 2026-07-14 (Budget / General Ledger / Income Statement)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -149,8 +149,45 @@ _Where we left off — read this first when resuming in a new session._
   - Verified live: all three cards load, edit, and save correctly; CY/PY
     columns on Reconciliation still populate correctly after removing the
     inline editor.
+- ✅ **Budget / General Ledger / Income Statement** - phase 1 of a broader
+  push toward a nicer, more Quicken-like finance UI (see Next steps for the
+  rest: a Home dashboard, a visual redesign pass, and eventual
+  Auditor-specific screens). Discovered by inspecting the legacy sheet's
+  Statement Details + Income Statement tabs (View > Show formulas): a
+  budget figure is a pseudo-transaction dated Jan 1, posted to a **parallel
+  "Budget" account** that shares its Statement Category/Item *names* (not
+  numbers - the two account trees are numbered independently) with the real
+  Income/Expense account it plans for. Our Chart of Accounts already seeds
+  these B-prefixed accounts (`category="Budget"`), so no COA changes were
+  needed.
+  - **Budget tab** (`backend/app/models.py` `BudgetEntry`,
+    `backend/app/routers/budget.py`, `frontend/src/pages/Budget/`) - one
+    row per Budget-category account per year (always shows every account,
+    $0 if unset, so it doubles as a "what's left to budget" checklist).
+    Plain positive amounts (no debit/credit sign - Actuals apply `abs()` to
+    match at report time). `GET /api/budget?year=`, upsert via
+    `PUT /api/budget/{account_no}?year=`.
+  - **General Ledger tab** (`backend/app/routers/general_ledger.py`,
+    `frontend/src/pages/GeneralLedger/`) - the union of Reconciliation +
+    Accrual + Budget (Budget rendered as a virtual line dated Jan 1),
+    read-only, with a Source badge column and year/source filters. This is
+    meant to be *the* single view every other financial report reads from
+    - see `backend/app/services/fiscal.py` for the shared CY/PY-cutoff
+    helpers used here and by Income Statement.
+  - **Income Statement tab** (`backend/app/routers/income_statement.py`,
+    `frontend/src/pages/IncomeStatement/`) - Plan (Budget, current year)
+    vs Actuals (Reconciliation + Accrual, CY only) vs Variance, grouped
+    Statement Category -> Statement Item, split into Income and
+    Expenditures sections - reproduces the legacy sheet's layout, including
+    its sign convention (Income: actual > plan is favorable/positive;
+    Expenditures: actual < plan is favorable/positive) confirmed from the
+    sheet's actual cell values, not guessed.
+  - Verified live end-to-end: entered a Budget amount, confirmed it showed
+    up correctly on both the General Ledger (as a virtual Jan-1 line) and
+    the Income Statement (correct Plan/Actuals/Variance row, correct
+    section - Expenditures > Administration > Diocese Fees).
 
-**Tests:** 24 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 32 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -159,6 +196,17 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
+- **Home dashboard** (phase 2 of the finance-UI push) — quick account
+  overview, budget vs actual, Income/Expense YTD, last data entry date.
+  Should read from the General Ledger + Income Statement endpoints rather
+  than re-deriving its own aggregation. _Recommended next._
+- **Visual redesign pass** (phase 3) — restyle existing pages toward a more
+  Quicken-like, accounting-app feel. Deliberately done after the reporting
+  foundation (Budget/General Ledger/Income Statement) so new pages aren't
+  built twice.
+- **Auditor-specific screens** (phase 4, later/separate ask) — a
+  read-only, audit-focused view; likely wants the Config tab's Audit
+  Validation date range once it exists.
 - **#7 CI/CD auto-deploy to VPS** — the "check in → build → deploy automatically"
   goal. Publish images to GHCR on push to `main`, then SSH + `docker compose pull
   && up` on the VPS (secrets as GitHub Actions secrets). _Recommended next._

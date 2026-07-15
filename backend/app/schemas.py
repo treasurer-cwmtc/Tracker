@@ -331,3 +331,78 @@ class AccrualEntryUpdate(BaseModel):
 class AccrualSplitGroupOut(BaseModel):
     parent: AccrualEntryOut
     children: list[AccrualEntryOut]
+
+
+class BudgetEntryOut(BaseModel):
+    """One row of the Budget page - always returned for every Budget-category
+    Chart of Accounts account for the requested year, even if no amount has
+    been entered yet (id=0, amount=0), so the page can render a full
+    editable table rather than needing a separate create step."""
+
+    id: int
+    year: int
+    account_no: str
+    amount: float
+    notes: str
+    statement_description: str
+    category: str
+    statement_category: str
+    statement_item: str
+    statement_detail: str
+
+
+class BudgetEntryUpsert(BaseModel):
+    amount: float
+    notes: str = ""
+
+
+class GeneralLedgerLineOut(BaseModel):
+    """One row of the unioned General Ledger view - Reconciliation and
+    Accrual entries plus Budget entries (rendered as a virtual line dated
+    Jan 1 of their year), all in the shape reports are built from."""
+
+    source: str  # "reconciliation" | "accrual" | "budget"
+    id: int
+    transaction_date: date | None
+    date_posted: date | None
+    description: str
+    account_no: str
+    statement_description: str
+    category: str
+    statement_category: str
+    statement_item: str
+    statement_detail: str
+    bank_account_name: str
+    method: str
+    amount: float
+    check_invoice_name: str
+    notes: str
+
+
+class IncomeStatementRowOut(BaseModel):
+    """One line: either a Statement Item's Plan/Actuals/Variance, or a
+    Statement Category subtotal / section total (label is then the category
+    name or "Total")."""
+
+    label: str
+    plan: float
+    actuals: float
+    variance: float
+
+
+class IncomeStatementGroupOut(BaseModel):
+    """All Statement Items under one Statement Category, plus that
+    category's subtotal row (e.g. "Vicar Related" with its Diocese
+    Conferences / Salaries and Benefits / ... rows)."""
+
+    statement_category: str
+    rows: list[IncomeStatementRowOut]
+    subtotal: IncomeStatementRowOut
+
+
+class IncomeStatementOut(BaseModel):
+    year: int
+    income_groups: list[IncomeStatementGroupOut]
+    income_total: IncomeStatementRowOut
+    expense_groups: list[IncomeStatementGroupOut]
+    expense_total: IncomeStatementRowOut

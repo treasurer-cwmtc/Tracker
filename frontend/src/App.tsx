@@ -4,13 +4,26 @@ import { authApi, User } from "./api/auth";
 import Upload from "./pages/Upload";
 import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
+import Budget from "./pages/Budget";
+import GeneralLedger from "./pages/GeneralLedger";
+import IncomeStatement from "./pages/IncomeStatement";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
 import Config from "./pages/Config";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 
-type Tab = "upload" | "reconciliation" | "accrual" | "rules" | "accounts" | "config" | "users";
+type Tab =
+  | "upload"
+  | "reconciliation"
+  | "accrual"
+  | "budget"
+  | "general-ledger"
+  | "income-statement"
+  | "rules"
+  | "accounts"
+  | "config"
+  | "users";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("upload");
@@ -97,6 +110,24 @@ export default function App() {
           Accrual
         </button>
         <button
+          className={tab === "budget" ? "active" : ""}
+          onClick={() => setTab("budget")}
+        >
+          Budget
+        </button>
+        <button
+          className={tab === "general-ledger" ? "active" : ""}
+          onClick={() => setTab("general-ledger")}
+        >
+          General Ledger
+        </button>
+        <button
+          className={tab === "income-statement" ? "active" : ""}
+          onClick={() => setTab("income-statement")}
+        >
+          Income Statement
+        </button>
+        <button
           className={tab === "rules" ? "active" : ""}
           onClick={() => setTab("rules")}
         >
@@ -127,6 +158,9 @@ export default function App() {
       {tab === "upload" && <Upload />}
       {tab === "reconciliation" && <Reconciliation />}
       {tab === "accrual" && <Accrual />}
+      {tab === "budget" && <Budget />}
+      {tab === "general-ledger" && <GeneralLedger />}
+      {tab === "income-statement" && <IncomeStatement />}
       {tab === "rules" && <Rules />}
       {tab === "accounts" && <Accounts />}
       {tab === "config" && <Config />}
