@@ -301,6 +301,95 @@ work. See `frontend/src/pages/Config/index.tsx`,
   because the sheet has them and they'll have consumers once budget-period
   math / an audit view exist (see STATUS.md).
 
+### Budget, General Ledger, and Income Statement
+
+Reporting is built in three layers, mirroring how the legacy sheet's
+Statement Details and Income Statement tabs actually work (confirmed via
+View > Show Formulas, not guessed): a budget figure is a pseudo-transaction
+dated Jan 1, posted to a **parallel "Budget" account** that shares its
+Statement Category/Item *names* with the real Income/Expense account it
+plans for - the Budget and Income/Expense account trees are numbered
+independently (e.g. Budget's "Pledges" account and Income's "Pledges"
+account have unrelated account numbers), so everything downstream joins on
+`(statement_category, statement_item)` name, never on account number. The
+Chart of Accounts already seeds these B-prefixed Budget accounts
+(`category="Budget"`) - no COA changes were needed for this feature.
+
+- **Budget** (`backend/app/models.py` `BudgetEntry`,
+  `backend/app/routers/budget.py`, `frontend/src/pages/Budget/`): a real
+  ledger, not "one row per account" - a single Budget account can carry
+  *multiple* lines in a year (confirmed from the sheet: "Salaries and
+  Benefits" has separate Salary/Health Insurance/Retirement Plan/Social
+  Security lines that sum together for reporting). Shaped like
+  `AccrualEntry` minus the fields that don't apply to a planning figure
+  (bank account, method, reconciled, split) - `transaction_date`,
+  `account_no`, `description`, `amount`, `notes`. `year` is filtered on
+  `transaction_date`'s year like every other ledger, not a separate stored
+  column. Amounts are entered as plain positive numbers (no debit/credit
+  sign) - unlike Reconciliation/Accrual amounts, which are signed (expenses
+  negative). `GET/POST /api/budget`, `PUT/DELETE /api/budget/{id}`. UI
+  mirrors Accrual's pattern (register + click-to-open detail popup + Quick
+  Add with a sticky Account field, since budget lines are usually entered
+  in a batch against the same account) but deliberately skips the shared
+  `ledger/` components and their column-health chip strip - Budget only has
+  fields it always populates, so there's nothing to flag as "missing".
+  `POST /api/budget/copy-year` (`{from_year, to_year, overwrite}`) copies
+  every line from one year into another (refusing to clobber an already
+  non-empty target year unless `overwrite: true`) as a starting point for
+  next year's budget.
+  - **Real 2026 data**: imported from the legacy sheet's Reconciliation tab
+    (rows where Statement Description starts with "Budget") via a one-time
+    script - 74 lines, $1,163,348.03, cross-validated against the sheet's
+    own computed Income Statement Plan figures before import (see
+    STATUS.md for the full note, including why "Restricted Net Assets"
+    lines correctly contribute to both Income and Expenditures Plan
+    totals - it's not a bug, the legacy sheet's own formula does the same).
+- **General Ledger** (`backend/app/routers/general_ledger.py`,
+  `frontend/src/pages/GeneralLedger/`): `GET /api/general-ledger?year=`
+  unions non-split Reconciliation + Accrual entries with Budget entries
+  (rendered as a virtual line dated Jan 1 of their year, `source: "budget"`,
+  only included if amount != 0), sorted by date. Read-only - this is meant
+  to be *the* single view every other financial report reads from, rather
+  than each report re-deriving its own aggregation.
+- **Income Statement** (`backend/app/routers/income_statement.py`,
+  `frontend/src/pages/IncomeStatement/`): `GET /api/income-statement`
+  (no params - always "the current year" per Config, always CY). Plan sums
+  `BudgetEntry` amounts for the Config current year; Actuals sums
+  Reconciliation + Accrual amounts where the transaction date is CY (see
+  `backend/app/services/fiscal.py` for the shared cutoff helpers), both
+  grouped by `(statement_category, statement_item)`, both `abs()`'d before
+  display. Response is nested: Income/Expenditures sections, each a list of
+  `IncomeStatementGroupOut` (one per Statement Category, containing its
+  Statement Item rows + a category subtotal), plus a section total. Income
+  has exactly one Statement Category ("Income" itself) so its section
+  renders flat with no visible per-category subtotal (would just duplicate
+  the section total); Expenditures has several (Vicar Related, Property,
+  Administration, ...), each getting its own subtotal row - this mirrors
+  the legacy sheet's layout exactly, confirmed against its real numbers.
+  **Sign convention** (confirmed from the sheet's actual cell values, not
+  assumed): Income variance = actual − plan (actual above plan is
+  favorable); Expenditures variance = plan − actual (actual below plan is
+  favorable) - the two sections intentionally use opposite formulas.
+
+### The Home dashboard
+
+The default landing tab after login (was Upload before this). Read-only
+quick overview - `GET /api/dashboard`
+(`backend/app/routers/dashboard.py`, `frontend/src/pages/Home/`):
+
+- **Account balances**: all-time sum of `ReconciliationEntry.amount` per
+  bank account. Accrual entries are excluded - they're planned/incurred
+  amounts, not yet real bank money, so including them would overstate the
+  balance.
+- **Income/Expense YTD vs Budget**: calls
+  `services/reporting.py::compute_income_statement` (the same function the
+  Income Statement router calls) and reads its `income_total`/
+  `expense_total` rows - the dashboard and the Income Statement page can
+  never show different YTD numbers, since they're the same computation.
+- **Last data entry**: `MAX(created_at)` across Reconciliation + Accrual - a
+  simple "is anyone keeping this up to date" signal, shown both relative
+  ("3 days ago") and as an absolute timestamp.
+
 ---
 
 ## 5. Architecture / tech stack
@@ -331,6 +420,11 @@ work. See `frontend/src/pages/Config/index.tsx`,
 - `accrual_entries` — the persistent, editable Accrual ledger; same shape as
   `reconciliation_entries` minus `dedup_key`/`source_run_id` (always
   hand-entered, never imported).
+- `app_settings` — generic key/value store (Config tab: `prior_year_end_date`,
+  `frequency_*`, `audit_validation_*`).
+- `budget_entries` — the Budget ledger; a Budget-category account can carry
+  multiple lines per year (no uniqueness constraint), `year` derived from
+  `transaction_date` like every other ledger.
 
 ### API surface
 
@@ -351,6 +445,12 @@ work. See `frontend/src/pages/Config/index.tsx`,
 - `GET/POST/PUT/DELETE /api/accrual`, `POST /api/accrual/{id}/split`,
   `POST /api/accrual/{id}/unsplit`, `GET /api/accrual/split-group/{id}`
   (the Accrual tab)
+- `GET/PUT /api/settings/{key}`, `GET /api/settings` (the Config tab)
+- `GET/POST /api/budget`, `PUT/DELETE /api/budget/{id}`,
+  `POST /api/budget/copy-year` (the Budget tab)
+- `GET /api/general-ledger?year=` (the General Ledger tab, read-only)
+- `GET /api/income-statement` (the Income Statement tab, read-only)
+- `GET /api/dashboard` (the Home tab, read-only)
 - `GET  /api/health` (public)
 
 All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.

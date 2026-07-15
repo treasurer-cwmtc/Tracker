@@ -287,3 +287,33 @@ class AccrualEntry(Base):
     is_split: Mapped[bool] = mapped_column(Boolean, default=False)
 
     bank_account: Mapped[BankAccount | None] = relationship()
+
+
+class BudgetEntry(Base):
+    """One planned-amount line for a Budget-category (B-prefixed) account.
+    The legacy sheet represents each of these as a pseudo-transaction dated
+    Jan 1 of the year, posted to a parallel "Budget" account that shares its
+    Statement Category/Item with the real Income/Expense account it plans
+    for (see ChartOfAccount.category). A single account can have *more than
+    one* budget line in the same year (e.g. "Salaries and Benefits" carries
+    a separate "Salary" line and a "Health Insurance" line, both posted to
+    the same account and summed together for reporting) - so this is a real
+    ledger, shaped like AccrualEntry minus the fields that don't apply to a
+    planning figure (bank account, method, reconciled, is_reimbursement,
+    split). Always a plain positive amount (no debit/credit sign) - Income
+    Statement reporting takes abs() of actual transaction amounts to match.
+    `year` is filtered on `transaction_date`'s year, same as every other
+    ledger in the app - no separate stored year column.
+    """
+
+    __tablename__ = "budget_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    account_no: Mapped[str] = mapped_column(String(20), default="")
+    description: Mapped[str] = mapped_column(String(300), default="")
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

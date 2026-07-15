@@ -1,0 +1,30 @@
+// The General Ledger: a read-only union of Reconciliation + Accrual +
+// Budget rows. Used by pages/GeneralLedger. Every other financial report
+// should read from this same view rather than re-deriving its own.
+import { BASE, authHeaders, j } from "./client";
+
+export interface GeneralLedgerLine {
+  source: "reconciliation" | "accrual" | "budget";
+  id: number;
+  transaction_date: string | null;
+  date_posted: string | null;
+  description: string;
+  account_no: string;
+  statement_description: string;
+  category: string;
+  statement_category: string;
+  statement_item: string;
+  statement_detail: string;
+  bank_account_name: string;
+  method: string;
+  amount: number;
+  check_invoice_name: string;
+  notes: string;
+}
+
+export const generalLedgerApi = {
+  list: (year?: number) =>
+    fetch(`${BASE}/api/general-ledger${year ? `?year=${year}` : ""}`, {
+      headers: authHeaders(),
+    }).then(j<GeneralLedgerLine[]>),
+};

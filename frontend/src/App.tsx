@@ -1,19 +1,34 @@
 import { useEffect, useState } from "react";
 import { auth, AuthError } from "./api/client";
 import { authApi, User } from "./api/auth";
+import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
+import Budget from "./pages/Budget";
+import GeneralLedger from "./pages/GeneralLedger";
+import IncomeStatement from "./pages/IncomeStatement";
 import Rules from "./pages/Rules";
 import Accounts from "./pages/Accounts";
 import Config from "./pages/Config";
 import Users from "./pages/Users";
 import Login from "./pages/Login";
 
-type Tab = "upload" | "reconciliation" | "accrual" | "rules" | "accounts" | "config" | "users";
+type Tab =
+  | "home"
+  | "upload"
+  | "reconciliation"
+  | "accrual"
+  | "budget"
+  | "general-ledger"
+  | "income-statement"
+  | "rules"
+  | "accounts"
+  | "config"
+  | "users";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("upload");
+  const [tab, setTab] = useState<Tab>("home");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -40,7 +55,7 @@ export default function App() {
   function logout() {
     auth.clear();
     setUser(null);
-    setTab("upload");
+    setTab("home");
   }
 
   if (loading) return <div className="app">Loading…</div>;
@@ -79,6 +94,12 @@ export default function App() {
 
       <nav className="tabs">
         <button
+          className={tab === "home" ? "active" : ""}
+          onClick={() => setTab("home")}
+        >
+          Home
+        </button>
+        <button
           className={tab === "upload" ? "active" : ""}
           onClick={() => setTab("upload")}
         >
@@ -95,6 +116,24 @@ export default function App() {
           onClick={() => setTab("accrual")}
         >
           Accrual
+        </button>
+        <button
+          className={tab === "budget" ? "active" : ""}
+          onClick={() => setTab("budget")}
+        >
+          Budget
+        </button>
+        <button
+          className={tab === "general-ledger" ? "active" : ""}
+          onClick={() => setTab("general-ledger")}
+        >
+          General Ledger
+        </button>
+        <button
+          className={tab === "income-statement" ? "active" : ""}
+          onClick={() => setTab("income-statement")}
+        >
+          Income Statement
         </button>
         <button
           className={tab === "rules" ? "active" : ""}
@@ -124,9 +163,13 @@ export default function App() {
         )}
       </nav>
 
+      {tab === "home" && <Home />}
       {tab === "upload" && <Upload />}
       {tab === "reconciliation" && <Reconciliation />}
       {tab === "accrual" && <Accrual />}
+      {tab === "budget" && <Budget />}
+      {tab === "general-ledger" && <GeneralLedger />}
+      {tab === "income-statement" && <IncomeStatement />}
       {tab === "rules" && <Rules />}
       {tab === "accounts" && <Accounts />}
       {tab === "config" && <Config />}

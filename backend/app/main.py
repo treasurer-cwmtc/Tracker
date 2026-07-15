@@ -9,7 +9,11 @@ from .routers import (
     accrual,
     auth,
     bank_accounts,
+    budget,
     coa,
+    dashboard,
+    general_ledger,
+    income_statement,
     reconcile,
     reconciliation,
     rules,
@@ -45,6 +49,10 @@ app.include_router(coa.router)
 app.include_router(bank_accounts.router)
 app.include_router(reconciliation.router)
 app.include_router(accrual.router)
+app.include_router(budget.router)
+app.include_router(general_ledger.router)
+app.include_router(income_statement.router)
+app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 
 

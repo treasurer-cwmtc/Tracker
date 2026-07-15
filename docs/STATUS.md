@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Config tab)
+**Last updated:** 2026-07-14 (Budget redesign + real 2026 data import)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -149,8 +149,110 @@ _Where we left off — read this first when resuming in a new session._
   - Verified live: all three cards load, edit, and save correctly; CY/PY
     columns on Reconciliation still populate correctly after removing the
     inline editor.
+- ✅ **Budget / General Ledger / Income Statement** - phase 1 of a broader
+  push toward a nicer, more Quicken-like finance UI (see Next steps for the
+  rest: a Home dashboard, a visual redesign pass, and eventual
+  Auditor-specific screens). Discovered by inspecting the legacy sheet's
+  Statement Details + Income Statement tabs (View > Show formulas): a
+  budget figure is a pseudo-transaction dated Jan 1, posted to a **parallel
+  "Budget" account** that shares its Statement Category/Item *names* (not
+  numbers - the two account trees are numbered independently) with the real
+  Income/Expense account it plans for. Our Chart of Accounts already seeds
+  these B-prefixed accounts (`category="Budget"`), so no COA changes were
+  needed.
+  - **Budget tab** (`backend/app/models.py` `BudgetEntry`,
+    `backend/app/routers/budget.py`, `frontend/src/pages/Budget/`) - one
+    row per Budget-category account per year (always shows every account,
+    $0 if unset, so it doubles as a "what's left to budget" checklist).
+    Plain positive amounts (no debit/credit sign - Actuals apply `abs()` to
+    match at report time). `GET /api/budget?year=`, upsert via
+    `PUT /api/budget/{account_no}?year=`.
+  - **General Ledger tab** (`backend/app/routers/general_ledger.py`,
+    `frontend/src/pages/GeneralLedger/`) - the union of Reconciliation +
+    Accrual + Budget (Budget rendered as a virtual line dated Jan 1),
+    read-only, with a Source badge column and year/source filters. This is
+    meant to be *the* single view every other financial report reads from
+    - see `backend/app/services/fiscal.py` for the shared CY/PY-cutoff
+    helpers used here and by Income Statement.
+  - **Income Statement tab** (`backend/app/routers/income_statement.py`,
+    `frontend/src/pages/IncomeStatement/`) - Plan (Budget, current year)
+    vs Actuals (Reconciliation + Accrual, CY only) vs Variance, grouped
+    Statement Category -> Statement Item, split into Income and
+    Expenditures sections - reproduces the legacy sheet's layout, including
+    its sign convention (Income: actual > plan is favorable/positive;
+    Expenditures: actual < plan is favorable/positive) confirmed from the
+    sheet's actual cell values, not guessed.
+  - Verified live end-to-end: entered a Budget amount, confirmed it showed
+    up correctly on both the General Ledger (as a virtual Jan-1 line) and
+    the Income Statement (correct Plan/Actuals/Variance row, correct
+    section - Expenditures > Administration > Diocese Fees).
+- ✅ **Home dashboard** (phase 2 of the finance-UI push) - now the default
+  landing tab after login (was Upload). `GET /api/dashboard`
+  (`backend/app/routers/dashboard.py`, `frontend/src/pages/Home/`):
+  - **Account balances** - all-time sum of Reconciliation amounts per bank
+    account (Accrual is excluded - it's planned/incurred, not yet real bank
+    money).
+  - **Income/Expense YTD vs Budget** - reuses the exact same aggregation as
+    the Income Statement tab (refactored the section-total math out into
+    `backend/app/services/reporting.py::compute_income_statement`, called
+    by both routers) so the two pages can never disagree.
+  - **Last data entry** - the most recent `created_at` across Reconciliation
+    + Accrual, shown relative ("3 days ago") plus an absolute timestamp - a
+    quick staleness check.
+  - Verified live: balances/YTD figures matched real data (including the
+    Diocese Fees budget entry from the Income Statement work above showing
+    up correctly in the Expenses vs Budget tile).
+- ✅ **Budget redesigned to a real multi-entry ledger + real 2026 data
+  imported.** Turned out the original "one row per account per year" model
+  was wrong: inspecting the legacy sheet's Reconciliation tab (rows tagged
+  `Statement Description` starting with "Budget") showed a single account
+  can carry *multiple* budget lines in one year - e.g. "Salaries and
+  Benefits" has four separate lines (Salary $19,096.20, Health Insurance
+  $17,640.00, Retirement Plan $2,546.16, Social Security $1,432.22 - sum
+  $40,714.58, which matches the sheet's own computed "Salaries and
+  Benefits" Plan total exactly). `BudgetEntry` was reshaped to match
+  (`transaction_date` instead of a separate `year` column, added
+  `description`, dropped the `year`+`account_no` uniqueness constraint) -
+  same fields as `AccrualEntry` minus bank account/method/reconciled/split,
+  which don't apply to a planning figure.
+  - **UI rebuilt to match Accrual's pattern** (`frontend/src/pages/Budget/`):
+    a plain register (no column-health chip strip - Budget only has fields
+    it always populates, so there was nothing to show a "some rows missing
+    this" pill for), click-to-open detail popup, and a Quick Add popup with
+    a sticky Account field (batches of budget lines are usually entered
+    against the same account, like the four Salaries and Benefits lines
+    above).
+  - **Copy-year**: `POST /api/budget/copy-year` copies every line from one
+    year into another (dates shifted) as a starting point for next year's
+    budget - refuses to clobber a year that already has entries unless
+    `overwrite: true`. Exposed on the Budget page as "Copy budget from year
+    ___ → Copy as starting point for {year}".
+  - **Real 2026 data imported**: read every "Budget"-tagged row in the
+    legacy sheet's Reconciliation tab (86 rows, 74 with a non-zero amount)
+    via the browser - amounts, descriptions ("Salary", "Health Insurance",
+    fund names like "Navjeevan"/"Oklahoma Mission"/"Texas Flood Relief"),
+    and notes ("Assumed 3% increase", "First communion bibles" etc.) - and
+    resolved each to the correct seeded `account_no` by matching Statement
+    Category/Item/Detail names (account numbers in the sheet are cosmetic;
+    ours are derived independently - see Chart of Accounts numbering notes
+    below). Cross-validated against the sheet's own computed Income
+    Statement Plan figures (Pledges $215,850, Sunday Offertory $10,000,
+    Salaries and Benefits $40,715 - all matched) before importing via a
+    one-time script against the local API. Total: 74 lines, $1,163,348.03.
+  - **Note on "Restricted Net Assets" appearing to double-count**: the
+    Income Statement's Plan aggregation joins Budget lines to real
+    Income/Expense accounts by `(Statement Category, Statement Item)` name
+    only, not by which section (Income vs Expenditures) is asking - and
+    "Restricted Net Assets" genuinely has matching item names on *both*
+    sides of the Chart of Accounts (e.g. `I111110`/`E261110` "Building
+    Improvement" - money raised for a restricted purpose vs. money spent
+    from it). A Restricted Net Assets budget line therefore contributes to
+    both the Income and Expenditures Plan totals. Confirmed this matches
+    the legacy sheet's own formula (`Reconciliation!O:O=A4` with no
+    Income/Expense-side filter on the Plan side) - not a bug, faithful
+    reproduction of the source.
 
-**Tests:** 24 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 39 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -159,9 +261,22 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
+- **Rename "Reconciliation" to "Actual"** throughout the UI (tab label,
+  page copy) - requested, not yet done. Purely a rename (nav button text,
+  headings, subtitle copy) - the underlying `ReconciliationEntry`
+  model/API/routes don't need to change.
+
+- **Visual redesign pass** (phase 3 of the finance-UI push) — restyle existing
+  pages toward a more Quicken-like, accounting-app feel. Deliberately done
+  after the reporting foundation (Budget/General Ledger/Income
+  Statement/Home dashboard) so new pages aren't built twice. _Recommended
+  next._
+- **Auditor-specific screens** (phase 4, later/separate ask) — a
+  read-only, audit-focused view; likely wants the Config tab's Audit
+  Validation date range once it exists.
 - **#7 CI/CD auto-deploy to VPS** — the "check in → build → deploy automatically"
   goal. Publish images to GHCR on push to `main`, then SSH + `docker compose pull
-  && up` on the VPS (secrets as GitHub Actions secrets). _Recommended next._
+  && up` on the VPS (secrets as GitHub Actions secrets).
 - **#2 Saved run history UI** — backend already persists runs/lines; add list/view/
   re-download. (Good small next feature.)
 - **#3 Roster-based donor normalization** (uses the Import-Roster tab).
