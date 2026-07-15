@@ -189,7 +189,7 @@ export default function QuickAddModal(props: {
             <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </label>
 
-          <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <label className="field field-checkbox">
             <input
               type="checkbox"
               checked={sticky.is_reimbursement}

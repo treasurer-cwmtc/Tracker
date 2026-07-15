@@ -1,14 +1,23 @@
 :root {
-  --bg: #f6f7f9;
+  /* Cross Way MTC brand: deep navy + cyan accent (from the church logo/brand assets). */
+  --bg: #f3f5f7;
   --card: #ffffff;
-  --border: #e3e6ea;
-  --text: #1f2933;
-  --muted: #6b7280;
-  --primary: #4f46e5;
-  --primary-dark: #4338ca;
+  --border: #e1e6ea;
+  --text: #131a24;
+  --muted: #64707d;
+  --primary: #22b8d1;
+  --primary-dark: #1a94a8;
+  --primary-light: #e5f8fb;
   --green: #059669;
   --red: #dc2626;
   --amber: #b45309;
+  --sidebar-bg: #0a0f1c;
+  --sidebar-bg-alt: #101a2e;
+  --sidebar-text: #9fb0c4;
+  --sidebar-text-dim: #5b6c82;
+  --sidebar-active: #142236;
+  --shadow-sm: 0 1px 2px rgba(10, 15, 28, 0.06);
+  --shadow-md: 0 4px 16px rgba(10, 15, 28, 0.08);
 }
 
 * {
@@ -23,10 +32,113 @@ body {
   color: var(--text);
 }
 
-.app {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px;
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+  align-items: stretch;
+}
+
+.sidebar {
+  flex: none;
+  width: 232px;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  padding: 22px 20px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-brand img {
+  display: block;
+  width: 100%;
+  max-width: 168px;
+  height: auto;
+  margin: 0 0 8px;
+}
+
+.sidebar-brand h1 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 4px;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-brand p {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--sidebar-text-dim);
+  margin: 0;
+}
+
+nav.sidebar-nav {
+  flex: 1;
+  padding: 14px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+nav.sidebar-nav button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--sidebar-text);
+  padding: 9px 13px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+nav.sidebar-nav button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+nav.sidebar-nav button.active {
+  background: var(--sidebar-active);
+  border-left-color: var(--primary);
+  color: #fff;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  padding: 14px 20px 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  color: var(--sidebar-text-dim);
+}
+
+.sidebar-footer b {
+  color: #fff;
+}
+
+.sidebar-footer button.link {
+  color: #f0a5a5;
+  padding: 0;
+  margin-top: 4px;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.app-content {
+  max-width: 1240px;
+  padding: 30px 36px 48px;
 }
 
 h1 {
@@ -34,41 +146,31 @@ h1 {
   margin: 0 0 4px;
 }
 
+h2,
+h3 {
+  color: var(--text);
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
 .subtitle {
   color: var(--muted);
   margin: 0 0 20px;
-  font-size: 14px;
-}
-
-nav.tabs {
-  display: flex;
-  gap: 6px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 20px;
-}
-
-nav.tabs button {
-  background: none;
-  border: none;
-  padding: 10px 16px;
-  font-size: 14px;
-  cursor: pointer;
-  color: var(--muted);
-  border-bottom: 2px solid transparent;
-}
-
-nav.tabs button.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
-  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.5;
 }
 
 .card {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 button.btn {
@@ -116,14 +218,88 @@ label.field span {
   margin-bottom: 4px;
 }
 
+label.field-checkbox {
+  display: flex !important;
+  flex: none !important;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+  min-width: 0 !important;
+}
+
+label.field-checkbox span {
+  display: inline;
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
 input[type="text"],
 input[type="number"],
+input[type="date"],
 select {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid #c4ccd0;
   border-radius: 8px;
   font-size: 14px;
+  background: #fbfcfc;
+  color: var(--text);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 22, 0.04);
+}
+
+input[type="text"]:hover,
+input[type="number"]:hover,
+input[type="date"]:hover,
+select:hover {
+  border-color: #97a3a8;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+select:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+  border-color: var(--primary);
+  background: #fff;
+}
+
+input[readonly],
+input:disabled,
+select:disabled {
+  background: var(--bg);
+  color: var(--muted);
+  cursor: default;
+  box-shadow: none;
+}
+
+input[readonly]:hover,
+input[readonly]:focus {
+  border-color: #c4ccd0;
+  outline: none;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23667075' stroke-width='1.5' fill='none' fill-rule='evenodd' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+  flex: none;
+}
+
+button.btn.secondary:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 table {
@@ -143,6 +319,9 @@ td {
 th {
   color: var(--muted);
   font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   position: sticky;
   top: 0;
   background: var(--card);
@@ -162,7 +341,7 @@ th {
 }
 
 .pill.stripe {
-  background: #eef2ff;
+  background: var(--primary-light);
   color: var(--primary);
 }
 
@@ -178,14 +357,23 @@ th {
 
 .stats {
   display: flex;
-  gap: 24px;
+  gap: 14px;
   flex-wrap: wrap;
   margin: 8px 0 0;
 }
 
+.stat {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  min-width: 140px;
+}
+
 .stat b {
   display: block;
-  font-size: 20px;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
 }
 
 .stat span {
@@ -249,6 +437,11 @@ td select {
   min-width: 90px;
 }
 
+td select {
+  padding-right: 22px;
+  background-position: right 6px center;
+}
+
 /* Column completeness chip strip (Reconciliation) */
 .chip-strip {
   display: flex;
@@ -277,7 +470,7 @@ td select {
 .chip.active {
   border-color: var(--primary);
   color: var(--primary);
-  background: #eef2ff;
+  background: var(--primary-light);
 }
 
 .chip-dot {
@@ -301,7 +494,7 @@ tr.register-row {
 }
 
 tr.register-row:hover {
-  background: var(--bg);
+  background: var(--primary-light);
 }
 
 tr.register-row td {
@@ -396,7 +589,7 @@ tr.register-row td {
 }
 
 .autocomplete-option.active {
-  background: #eef2ff;
+  background: var(--primary-light);
   color: var(--primary);
 }
 

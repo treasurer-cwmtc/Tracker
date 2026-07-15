@@ -155,7 +155,7 @@ export default function AddAccountForm(props: {
         </div>
       )}
       <div className="row">
-        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <label className="field field-checkbox">
           <input
             type="checkbox"
             checked={isTaxDeductible}
@@ -163,7 +163,7 @@ export default function AddAccountForm(props: {
           />
           <span>Tax deductible</span>
         </label>
-        <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <label className="field field-checkbox">
           <input
             type="checkbox"
             checked={isMandatory}
