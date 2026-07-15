@@ -112,11 +112,11 @@ export default function TransactionModal(props: {
         </div>
 
         <div className="row">
-          <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <label className="field field-checkbox">
             <CheckboxCell value={e.reconciled} onChange={(v) => set({ reconciled: v })} />
             <span>Reconciled</span>
           </label>
-          <label className="field" style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <label className="field field-checkbox">
             <CheckboxCell
               value={e.is_reimbursement}
               onChange={(v) => set({ is_reimbursement: v })}
