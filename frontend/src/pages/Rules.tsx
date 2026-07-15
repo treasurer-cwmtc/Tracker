@@ -6,6 +6,7 @@ export default function Rules() {
   const [rules, setRules] = useState<Rule[]>([]);
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [error, setError] = useState("");
+  const [selected, setSelected] = useState<Rule | null>(null);
 
   const [ruleType, setRuleType] = useState<"bank_keyword" | "stripe_fund">(
     "bank_keyword"
@@ -40,13 +41,19 @@ export default function Rules() {
     }
   }
 
+  async function update(id: number, patch: Partial<Rule>) {
+    const updated = await rulesApi.updateRule(id, patch);
+    setRules((prev) => prev.map((r) => (r.id === id ? updated : r)));
+    setSelected((prev) => (prev && prev.id === id ? updated : prev));
+  }
+
   async function toggle(rule: Rule) {
-    await rulesApi.updateRule(rule.id, { active: !rule.active });
-    await load();
+    await update(rule.id, { active: !rule.active });
   }
 
   async function remove(id: number) {
     await rulesApi.deleteRule(id);
+    setSelected(null);
     await load();
   }
 
@@ -119,7 +126,7 @@ export default function Rules() {
         rules={keywordRules}
         accounts={accounts}
         onToggle={toggle}
-        onRemove={remove}
+        onSelect={setSelected}
       />
       <RuleTable
         title="Stripe fund rules"
@@ -127,8 +134,18 @@ export default function Rules() {
         rules={fundRules}
         accounts={accounts}
         onToggle={toggle}
-        onRemove={remove}
+        onSelect={setSelected}
       />
+
+      {selected && (
+        <RuleDetailModal
+          rule={selected}
+          accounts={accounts}
+          onUpdate={update}
+          onDelete={remove}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   );
 }
@@ -139,7 +156,7 @@ function RuleTable(props: {
   rules: Rule[];
   accounts: ChartAccount[];
   onToggle: (r: Rule) => void;
-  onRemove: (id: number) => void;
+  onSelect: (r: Rule) => void;
 }) {
   const desc = (no: string) =>
     props.accounts.find((a) => a.account_no === no)?.statement_description || "";
@@ -155,12 +172,11 @@ function RuleTable(props: {
             <th>Category</th>
             <th className="num">Priority</th>
             <th>Active</th>
-            <th></th>
           </tr>
         </thead>
         <tbody>
           {props.rules.map((r) => (
-            <tr key={r.id}>
+            <tr key={r.id} className="register-row" onClick={() => props.onSelect(r)}>
               <td>
                 <b>{r.pattern}</b>
               </td>
@@ -171,25 +187,124 @@ function RuleTable(props: {
                 <input
                   type="checkbox"
                   checked={r.active}
+                  onClick={(e) => e.stopPropagation()}
                   onChange={() => props.onToggle(r)}
                 />
-              </td>
-              <td>
-                <button className="link" onClick={() => props.onRemove(r.id)}>
-                  Delete
-                </button>
               </td>
             </tr>
           ))}
           {props.rules.length === 0 && (
             <tr>
-              <td colSpan={6} style={{ color: "var(--muted)" }}>
+              <td colSpan={5} style={{ color: "var(--muted)" }}>
                 No rules yet.
               </td>
             </tr>
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function RuleDetailModal(props: {
+  rule: Rule;
+  accounts: ChartAccount[];
+  onUpdate: (id: number, patch: Partial<Rule>) => void;
+  onDelete: (id: number) => void;
+  onClose: () => void;
+}) {
+  const r = props.rule;
+  const [accountNo, setAccountNo] = useState(r.account_no);
+  const [priority, setPriority] = useState(r.priority);
+
+  useEffect(() => {
+    setAccountNo(r.account_no);
+    setPriority(r.priority);
+  }, [r]);
+
+  useEffect(() => {
+    function onKey(ev: KeyboardEvent) {
+      if (ev.key === "Escape") props.onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const accountsForType = props.accounts.filter((a) =>
+    r.rule_type === "stripe_fund" ? a.category === "Income" : a.category === "Expense"
+  );
+
+  function saveAccount(v: string) {
+    setAccountNo(v);
+    if (v) props.onUpdate(r.id, { account_no: v });
+  }
+
+  function savePriority() {
+    if (priority !== r.priority) props.onUpdate(r.id, { priority });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="modal-dialog" onClick={(ev) => ev.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 style={{ margin: 0 }}>{r.pattern}</h3>
+            <p className="subtitle" style={{ margin: "2px 0 0" }}>
+              {r.rule_type === "bank_keyword" ? "Bank keyword rule" : "Stripe fund rule"}
+            </p>
+          </div>
+          <button className="link" onClick={props.onClose}>
+            Close
+          </button>
+        </div>
+
+        <label className="field field-checkbox">
+          <input
+            type="checkbox"
+            checked={r.active}
+            onChange={() => props.onUpdate(r.id, { active: !r.active })}
+          />
+          <span>Active</span>
+        </label>
+
+        <label className="field">
+          <span>Category (account)</span>
+          <select value={accountNo} onChange={(e) => saveAccount(e.target.value)}>
+            <option value="">Select an account…</option>
+            {accountsForType.map((a) => (
+              <option key={a.account_no} value={a.account_no}>
+                {a.account_no} · {a.statement_description}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Priority</span>
+          <input
+            type="number"
+            value={priority}
+            onChange={(e) => setPriority(Number(e.target.value))}
+            onBlur={savePriority}
+          />
+        </label>
+
+        <div className="modal-footer">
+          <button
+            className="link"
+            onClick={() => {
+              props.onDelete(r.id);
+              props.onClose();
+            }}
+          >
+            Delete rule
+          </button>
+          <button className="btn" onClick={props.onClose}>
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
