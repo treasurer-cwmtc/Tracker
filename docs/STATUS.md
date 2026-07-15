@@ -4,7 +4,7 @@ _Where we left off — read this first when resuming in a new session._
 
 **Repo:** https://github.com/treasurer-cwmtc/Tracker
 **Local path (Windows):** `C:\Users\nmathew\source\repos\bank-stripe-recon`
-**Last updated:** 2026-07-14 (Budget / General Ledger / Income Statement)
+**Last updated:** 2026-07-14 (Home dashboard)
 
 > Start every session by reading **[PROJECT.md](PROJECT.md)** (full knowledge base:
 > goal, reconciliation logic, data model, stack) and this file.
@@ -186,8 +186,24 @@ _Where we left off — read this first when resuming in a new session._
     up correctly on both the General Ledger (as a virtual Jan-1 line) and
     the Income Statement (correct Plan/Actuals/Variance row, correct
     section - Expenditures > Administration > Diocese Fees).
+- ✅ **Home dashboard** (phase 2 of the finance-UI push) - now the default
+  landing tab after login (was Upload). `GET /api/dashboard`
+  (`backend/app/routers/dashboard.py`, `frontend/src/pages/Home/`):
+  - **Account balances** - all-time sum of Reconciliation amounts per bank
+    account (Accrual is excluded - it's planned/incurred, not yet real bank
+    money).
+  - **Income/Expense YTD vs Budget** - reuses the exact same aggregation as
+    the Income Statement tab (refactored the section-total math out into
+    `backend/app/services/reporting.py::compute_income_statement`, called
+    by both routers) so the two pages can never disagree.
+  - **Last data entry** - the most recent `created_at` across Reconciliation
+    + Accrual, shown relative ("3 days ago") plus an absolute timestamp - a
+    quick staleness check.
+  - Verified live: balances/YTD figures matched real data (including the
+    Diocese Fees budget entry from the Income Statement work above showing
+    up correctly in the Expenses vs Budget tile).
 
-**Tests:** 32 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
+**Tests:** 36 passing (`cd backend; .\.venv\Scripts\python.exe -m pytest`).
 **Frontend build:** clean (`cd frontend; npm run build`).
 
 ---
@@ -196,20 +212,17 @@ _Where we left off — read this first when resuming in a new session._
 
 Tracked as issues on the repo. Suggested order:
 
-- **Home dashboard** (phase 2 of the finance-UI push) — quick account
-  overview, budget vs actual, Income/Expense YTD, last data entry date.
-  Should read from the General Ledger + Income Statement endpoints rather
-  than re-deriving its own aggregation. _Recommended next._
-- **Visual redesign pass** (phase 3) — restyle existing pages toward a more
-  Quicken-like, accounting-app feel. Deliberately done after the reporting
-  foundation (Budget/General Ledger/Income Statement) so new pages aren't
-  built twice.
+- **Visual redesign pass** (phase 3 of the finance-UI push) — restyle existing
+  pages toward a more Quicken-like, accounting-app feel. Deliberately done
+  after the reporting foundation (Budget/General Ledger/Income
+  Statement/Home dashboard) so new pages aren't built twice. _Recommended
+  next._
 - **Auditor-specific screens** (phase 4, later/separate ask) — a
   read-only, audit-focused view; likely wants the Config tab's Audit
   Validation date range once it exists.
 - **#7 CI/CD auto-deploy to VPS** — the "check in → build → deploy automatically"
   goal. Publish images to GHCR on push to `main`, then SSH + `docker compose pull
-  && up` on the VPS (secrets as GitHub Actions secrets). _Recommended next._
+  && up` on the VPS (secrets as GitHub Actions secrets).
 - **#2 Saved run history UI** — backend already persists runs/lines; add list/view/
   re-download. (Good small next feature.)
 - **#3 Roster-based donor normalization** (uses the Import-Roster tab).

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { auth, AuthError } from "./api/client";
 import { authApi, User } from "./api/auth";
+import Home from "./pages/Home";
 import Upload from "./pages/Upload";
 import Reconciliation from "./pages/Reconciliation";
 import Accrual from "./pages/Accrual";
@@ -14,6 +15,7 @@ import Users from "./pages/Users";
 import Login from "./pages/Login";
 
 type Tab =
+  | "home"
   | "upload"
   | "reconciliation"
   | "accrual"
@@ -26,7 +28,7 @@ type Tab =
   | "users";
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("upload");
+  const [tab, setTab] = useState<Tab>("home");
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,7 +55,7 @@ export default function App() {
   function logout() {
     auth.clear();
     setUser(null);
-    setTab("upload");
+    setTab("home");
   }
 
   if (loading) return <div className="app">Loading…</div>;
@@ -91,6 +93,12 @@ export default function App() {
       </div>
 
       <nav className="tabs">
+        <button
+          className={tab === "home" ? "active" : ""}
+          onClick={() => setTab("home")}
+        >
+          Home
+        </button>
         <button
           className={tab === "upload" ? "active" : ""}
           onClick={() => setTab("upload")}
@@ -155,6 +163,7 @@ export default function App() {
         )}
       </nav>
 
+      {tab === "home" && <Home />}
       {tab === "upload" && <Upload />}
       {tab === "reconciliation" && <Reconciliation />}
       {tab === "accrual" && <Accrual />}

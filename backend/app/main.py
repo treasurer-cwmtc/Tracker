@@ -11,6 +11,7 @@ from .routers import (
     bank_accounts,
     budget,
     coa,
+    dashboard,
     general_ledger,
     income_statement,
     reconcile,
@@ -51,6 +52,7 @@ app.include_router(accrual.router)
 app.include_router(budget.router)
 app.include_router(general_ledger.router)
 app.include_router(income_statement.router)
+app.include_router(dashboard.router)
 app.include_router(settings_router.router)
 
 

@@ -349,6 +349,25 @@ Chart of Accounts already seeds these B-prefixed Budget accounts
   favorable); Expenditures variance = plan − actual (actual below plan is
   favorable) - the two sections intentionally use opposite formulas.
 
+### The Home dashboard
+
+The default landing tab after login (was Upload before this). Read-only
+quick overview - `GET /api/dashboard`
+(`backend/app/routers/dashboard.py`, `frontend/src/pages/Home/`):
+
+- **Account balances**: all-time sum of `ReconciliationEntry.amount` per
+  bank account. Accrual entries are excluded - they're planned/incurred
+  amounts, not yet real bank money, so including them would overstate the
+  balance.
+- **Income/Expense YTD vs Budget**: calls
+  `services/reporting.py::compute_income_statement` (the same function the
+  Income Statement router calls) and reads its `income_total`/
+  `expense_total` rows - the dashboard and the Income Statement page can
+  never show different YTD numbers, since they're the same computation.
+- **Last data entry**: `MAX(created_at)` across Reconciliation + Accrual - a
+  simple "is anyone keeping this up to date" signal, shown both relative
+  ("3 days ago") and as an absolute timestamp.
+
 ---
 
 ## 5. Architecture / tech stack
@@ -407,6 +426,7 @@ Chart of Accounts already seeds these B-prefixed Budget accounts
 - `GET /api/budget?year=`, `PUT /api/budget/{account_no}?year=` (the Budget tab)
 - `GET /api/general-ledger?year=` (the General Ledger tab, read-only)
 - `GET /api/income-statement` (the Income Statement tab, read-only)
+- `GET /api/dashboard` (the Home tab, read-only)
 - `GET  /api/health` (public)
 
 All endpoints except `/api/health` and `/api/auth/login` require a Bearer token.

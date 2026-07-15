@@ -406,3 +406,19 @@ class IncomeStatementOut(BaseModel):
     income_total: IncomeStatementRowOut
     expense_groups: list[IncomeStatementGroupOut]
     expense_total: IncomeStatementRowOut
+
+
+class BankAccountBalanceOut(BaseModel):
+    bank_account_id: int
+    name: str
+    balance: float
+
+
+class DashboardOut(BaseModel):
+    year: int
+    bank_accounts: list[BankAccountBalanceOut]
+    income_ytd: float
+    income_plan_ytd: float
+    expense_ytd: float
+    expense_plan_ytd: float
+    last_entry_at: datetime | None
