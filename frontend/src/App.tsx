@@ -107,7 +107,6 @@ export default function App() {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <img src={logo} alt="Cross Way Mar Thoma Church" />
-          <p>Treasurer — bank/Stripe reconciliation and church finance tracking.</p>
         </div>
 
         <nav className="sidebar-nav">
