@@ -182,21 +182,28 @@ function AddKeywordRuleRow(props: {
   accounts: ChartAccount[];
   onAdded: () => void;
 }) {
+  // Pre-filled with the full raw line, but editable - trim it down to just
+  // the meaningful part (e.g. the payee name) so the rule matches every
+  // line containing that phrase, not only this exact one.
+  const [pattern, setPattern] = useState(props.description);
   const [accountNo, setAccountNo] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   async function add() {
-    if (!accountNo) return;
+    if (!accountNo || !pattern.trim()) return;
     setBusy(true);
     setError("");
     try {
       await rulesApi.createRule({
         rule_type: "bank_keyword",
-        pattern: props.description,
+        pattern: pattern.trim(),
         account_no: accountNo,
         priority: 100,
       });
+      // Re-checks every still-uncategorized line against the current rule
+      // set (including this new one), so any other line containing the
+      // same keyword gets picked up automatically, not just this one.
       props.onAdded();
     } catch (e) {
       setError((e as Error).message);
@@ -208,15 +215,15 @@ function AddKeywordRuleRow(props: {
   return (
     <div className="row" style={{ alignItems: "flex-end", marginBottom: 10 }}>
       <label className="field" style={{ flex: 2 }}>
-        <span>Bank description</span>
-        <input type="text" value={props.description} readOnly />
+        <span>Keyword to match (edit down to the meaningful part)</span>
+        <input type="text" value={pattern} onChange={(e) => setPattern(e.target.value)} />
       </label>
       <label className="field">
         <span>Category (account)</span>
         <AccountPicker value={accountNo} accounts={props.accounts} onChange={setAccountNo} />
       </label>
       <div className="field" style={{ flex: "none" }}>
-        <button className="btn secondary" onClick={add} disabled={!accountNo || busy}>
+        <button className="btn secondary" onClick={add} disabled={!accountNo || !pattern.trim() || busy}>
           {busy ? "Adding…" : "Add rule"}
         </button>
       </div>
