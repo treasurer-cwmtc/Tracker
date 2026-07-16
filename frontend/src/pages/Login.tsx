@@ -37,9 +37,6 @@ export default function Login({ onSuccess }: { onSuccess: () => void }) {
     >
       <img src={logo} alt="Cross Way Mar Thoma Church" style={{ width: 220, maxWidth: "80vw" }} />
       <div style={{ width: "100%", maxWidth: 360 }}>
-        <p className="subtitle" style={{ textAlign: "center", color: "var(--sidebar-text)" }}>
-          Treasurer sign in
-        </p>
         <form className="card" onSubmit={submit}>
         <label className="field">
           <span>Username</span>
