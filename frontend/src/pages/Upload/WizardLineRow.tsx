@@ -19,7 +19,7 @@ export default function WizardLineRow(props: {
       <td>{l.transaction_date}</td>
       <td>{l.bank_description || l.description || <span style={{ color: "var(--muted)" }}>—</span>}</td>
       <td className="num">{l.amount.toFixed(2)}</td>
-      <td onClick={(e) => e.stopPropagation()}>
+      <td onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}>
         <AccountPicker
           value={l.account_no}
           accounts={props.accounts}
@@ -30,9 +30,9 @@ export default function WizardLineRow(props: {
         {l.is_stripe_payout ? (
           <span className="pill stripe">Pending Stripe match</span>
         ) : l.matched ? (
-          <span className="pill bank">{l.category}</span>
+          <span className="pill bank">✓ Categorized</span>
         ) : (
-          <span className="pill warn">{l.notes || "Uncategorized"}</span>
+          <span className="pill warn">Uncategorized</span>
         )}
       </td>
     </tr>

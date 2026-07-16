@@ -585,9 +585,8 @@ tr.register-row td {
   font-size: 13px;
   font-weight: 400;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  line-height: 1.35;
 }
 
 .autocomplete-option.active {

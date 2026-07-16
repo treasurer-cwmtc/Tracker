@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { reconcileApi, ReconRun } from "../../api/reconcile";
+import { Fragment, useMemo, useState } from "react";
+import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
 
 export default function Step3Reconcile(props: {
   run: ReconRun;
@@ -10,6 +10,7 @@ export default function Step3Reconcile(props: {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [expandedDay, setExpandedDay] = useState<string | null>(null);
 
   const run = props.run;
 
@@ -28,14 +29,20 @@ export default function Step3Reconcile(props: {
   }
 
   const byDay = useMemo(() => {
-    const map = new Map<string, { total: number; count: number; hasIssue: boolean }>();
+    const map = new Map<
+      string,
+      { total: number; count: number; hasIssue: boolean; issueLines: ReconLine[] }
+    >();
     for (const l of run.lines) {
       if (l.source !== "stripe") continue;
       const day = l.date_posted || "unknown";
-      const row = map.get(day) || { total: 0, count: 0, hasIssue: false };
+      const row = map.get(day) || { total: 0, count: 0, hasIssue: false, issueLines: [] };
       row.total += l.amount;
       row.count += 1;
-      if (!l.matched) row.hasIssue = true;
+      if (!l.matched) {
+        row.hasIssue = true;
+        row.issueLines.push(l);
+      }
       map.set(day, row);
     }
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -92,18 +99,51 @@ export default function Step3Reconcile(props: {
               </thead>
               <tbody>
                 {byDay.map(([day, row]) => (
-                  <tr key={day}>
-                    <td>{day}</td>
-                    <td className="num">{row.total.toFixed(2)}</td>
-                    <td className="num">{row.count}</td>
-                    <td>
-                      {row.hasIssue ? (
-                        <span className="pill warn">Needs attention</span>
-                      ) : (
-                        <span className="pill bank">✓ Matched</span>
-                      )}
-                    </td>
-                  </tr>
+                  <Fragment key={day}>
+                    <tr
+                      className={row.hasIssue ? "register-row" : undefined}
+                      onClick={() =>
+                        row.hasIssue && setExpandedDay(expandedDay === day ? null : day)
+                      }
+                    >
+                      <td>{day}</td>
+                      <td className="num">{row.total.toFixed(2)}</td>
+                      <td className="num">{row.count}</td>
+                      <td>
+                        {row.hasIssue ? (
+                          <span className="pill warn">
+                            Needs attention {expandedDay === day ? "▲" : "▼"}
+                          </span>
+                        ) : (
+                          <span className="pill bank">✓ Matched</span>
+                        )}
+                      </td>
+                    </tr>
+                    {expandedDay === day && (
+                      <tr>
+                        <td colSpan={4} style={{ background: "var(--bg)" }}>
+                          <table style={{ margin: "4px 0" }}>
+                            <thead>
+                              <tr>
+                                <th>Description</th>
+                                <th className="num">Amount</th>
+                                <th>What's wrong</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {row.issueLines.map((l) => (
+                                <tr key={l.id}>
+                                  <td>{l.description || l.bank_description}</td>
+                                  <td className="num">{l.amount.toFixed(2)}</td>
+                                  <td>{l.notes}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>

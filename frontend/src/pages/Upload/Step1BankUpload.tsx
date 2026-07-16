@@ -51,20 +51,30 @@ export default function Step1BankUpload(props: {
     props.onRunChange(fresh);
   }
 
+  // Sorted by bank description so identical/similar payees end up next to
+  // each other, instead of scattered by date - much easier to spot a
+  // pattern worth writing one rule for.
+  const sortedLines = useMemo(() => {
+    if (!run) return [];
+    return [...run.lines].sort((a, b) =>
+      a.bank_description.localeCompare(b.bank_description)
+    );
+  }, [run]);
+
   // Distinct bank descriptions with no keyword-rule match yet - excludes
   // Stripe transfer lines, which are handled entirely in step 2/3.
   const uncategorizedDescriptions = useMemo(() => {
     if (!run) return [];
     const seen = new Set<string>();
     const out: string[] = [];
-    for (const l of run.lines) {
+    for (const l of sortedLines) {
       if (l.is_stripe_payout || l.account_no || !l.bank_description) continue;
       if (seen.has(l.bank_description)) continue;
       seen.add(l.bank_description);
       out.push(l.bank_description);
     }
     return out;
-  }, [run]);
+  }, [sortedLines]);
 
   return (
     <div>
@@ -116,7 +126,7 @@ export default function Step1BankUpload(props: {
                   </tr>
                 </thead>
                 <tbody>
-                  {run.lines.map((l) => (
+                  {sortedLines.map((l) => (
                     <WizardLineRow
                       key={l.id}
                       line={l}
@@ -215,11 +225,15 @@ function AddKeywordRuleRow(props: {
   return (
     <div className="row" style={{ alignItems: "flex-end", marginBottom: 10 }}>
       <label className="field" style={{ flex: 2 }}>
+        <span>Bank description</span>
+        <input type="text" value={props.description} readOnly title={props.description} />
+      </label>
+      <label className="field" style={{ flex: 2 }}>
         <span>Keyword to match (edit down to the meaningful part)</span>
         <input type="text" value={pattern} onChange={(e) => setPattern(e.target.value)} />
       </label>
-      <label className="field">
-        <span>Category (account)</span>
+      <label className="field" style={{ flex: 2 }}>
+        <span>Category assigned</span>
         <AccountPicker value={accountNo} accounts={props.accounts} onChange={setAccountNo} />
       </label>
       <div className="field" style={{ flex: "none" }}>

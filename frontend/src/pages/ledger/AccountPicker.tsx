@@ -53,8 +53,9 @@ export default function AccountPicker(props: {
     const rect = boxRef.current.getBoundingClientRect();
     // At least as wide as the input, but never narrower than a readable
     // minimum - a table-cell input can be much narrower than the account
-    // names it needs to display.
-    const width = Math.max(rect.width, 320);
+    // names it needs to display. Options also wrap (see .autocomplete-option
+    // in styles.css) so nothing gets cut off even at this width.
+    const width = Math.max(rect.width, 380);
     const left = Math.min(rect.left, window.innerWidth - width - 12);
     setCoords({ top: rect.bottom + 4, left: Math.max(left, 8), width });
 
@@ -123,6 +124,7 @@ export default function AccountPicker(props: {
         type="text"
         placeholder={props.placeholder || "— uncategorized —"}
         value={open ? query : selected ? labelFor(selected) : ""}
+        title={!open && selected ? labelFor(selected) : undefined}
         onFocus={() => {
           setOpen(true);
           setQuery("");
