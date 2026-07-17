@@ -164,12 +164,6 @@ export default function Step3Reconcile(props: {
                         ) : (
                           <span className="pill bank">✓ Matched</span>
                         )}
-                        {row.adjustmentLines.length > 0 && (
-                          <div style={{ color: "var(--muted)", fontSize: 11, marginTop: 2 }}>
-                            includes ${row.adjustmentLines[0].amount.toFixed(2)} fee/timing
-                            adjustment
-                          </div>
-                        )}
                       </td>
                     </tr>
                     {expandedDay === row.day && (
