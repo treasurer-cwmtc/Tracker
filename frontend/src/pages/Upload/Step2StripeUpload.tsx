@@ -54,7 +54,21 @@ export default function Step2StripeUpload(props: {
 
       {check && (
         <div className="card">
-          <h3 style={{ marginTop: 0 }}>Fund coverage</h3>
+          <div
+            style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}
+          >
+            <h3 style={{ marginTop: 0 }}>Fund coverage</h3>
+            <div style={{ textAlign: "right" }}>
+              <button className="btn" onClick={props.onNext} disabled={!check.all_covered}>
+                Next: Reconcile
+              </button>
+              {!check.all_covered && (
+                <p style={{ color: "var(--muted)", fontSize: 12, margin: "6px 0 0" }}>
+                  Add a rule for every red fund below to continue.
+                </p>
+              )}
+            </div>
+          </div>
           {check.all_covered ? (
             <p className="ok">✓ All funds in this file have a rule.</p>
           ) : (
