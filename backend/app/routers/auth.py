@@ -1,3 +1,4 @@
+import logging
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,6 +24,7 @@ from ..security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 settings = get_settings()
+logger = logging.getLogger("app.auth")
 
 
 @router.post("/login", response_model=Token)
@@ -44,10 +46,17 @@ def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)) -> 
     must already exist - matched by email, added ahead of time on the Users
     page - unrecognized emails are rejected rather than auto-created."""
     try:
+        # A few seconds of clock_skew tolerance - the library defaults to
+        # zero, which is stricter than normal clock drift between this
+        # machine and Google's servers actually allows for.
         claims = google_id_token.verify_oauth2_token(
-            payload.id_token, google_requests.Request(), settings.google_client_id
+            payload.id_token,
+            google_requests.Request(),
+            settings.google_client_id,
+            clock_skew_in_seconds=10,
         )
     except ValueError as e:
+        logger.warning("Google ID token verification failed: %s", e)
         raise HTTPException(status_code=401, detail="Invalid Google sign-in token.") from e
 
     email = claims.get("email", "")
