@@ -13,13 +13,13 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: recon
+          POSTGRES_USER: ledger_user
           POSTGRES_PASSWORD: recon
           POSTGRES_DB: ledger_db
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U recon"
+          --health-cmd "pg_isready -U ledger_user"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
@@ -38,7 +38,7 @@ jobs:
       - name: Run tests
         working-directory: .
         env:
-          DATABASE_URL: postgresql+psycopg://recon:recon@localhost:5432/ledger_db
+          DATABASE_URL: postgresql+psycopg://ledger_user:recon@localhost:5432/ledger_db
         run: python -m pytest -q
 
   frontend:

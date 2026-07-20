@@ -24,5 +24,5 @@ if [ "$CONFIRM" != "restore" ]; then
 fi
 
 echo "==> Restoring..."
-gunzip -c "$FILE" | $COMPOSE exec -T db psql -U recon -d ledger_db
+gunzip -c "$FILE" | $COMPOSE exec -T db psql -U ledger_user -d ledger_db
 echo "==> Restore complete. Open the app and confirm it looks right before trusting it."

@@ -90,7 +90,7 @@ environment, no SQLite fallback. Start one (the `db` service already in
 docker compose up -d db
 cd backend
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt pytest httpx
-$env:DATABASE_URL = "postgresql+psycopg://recon:recon@localhost:5432/ledger_db"
+$env:DATABASE_URL = "postgresql+psycopg://ledger_user:recon@localhost:5432/ledger_db"
 cd ..
 .\backend\.venv\Scripts\python.exe -m pytest
 ```

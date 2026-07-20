@@ -17,7 +17,7 @@ from app.main import app  # noqa: E402
 # Tests run against a real Postgres instance - same database engine as every
 # real environment (dev/staging/prod) - not SQLite. Point this at a throwaway
 # Postgres, e.g. `docker compose up -d db` then
-# DATABASE_URL=postgresql+psycopg://recon:recon@localhost:5432/ledger_db pytest
+# DATABASE_URL=postgresql+psycopg://ledger_user:recon@localhost:5432/ledger_db pytest
 database_url = os.environ.get("DATABASE_URL")
 if not database_url:
     raise RuntimeError(

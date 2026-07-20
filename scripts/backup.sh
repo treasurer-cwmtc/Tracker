@@ -14,7 +14,7 @@ OUT_FILE="$BACKUP_DIR/cross-way-ledger_${TIMESTAMP}.sql.gz"
 mkdir -p "$BACKUP_DIR"
 
 echo "==> Backing up to $OUT_FILE"
-if ! $COMPOSE exec -T db pg_dump -U recon ledger_db | gzip > "$OUT_FILE.tmp"; then
+if ! $COMPOSE exec -T db pg_dump -U ledger_user ledger_db | gzip > "$OUT_FILE.tmp"; then
   echo "BACKUP FAILED: pg_dump did not complete successfully" >&2
   rm -f "$OUT_FILE.tmp"
   exit 1

@@ -19,20 +19,20 @@ if [ -z "$LATEST" ]; then
 fi
 echo "==> Verifying: $LATEST"
 
-$COMPOSE exec -T db psql -U recon -d ledger_db -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null
-$COMPOSE exec -T db psql -U recon -d ledger_db -c "CREATE DATABASE $TEST_DB OWNER recon;" >/dev/null
+$COMPOSE exec -T db psql -U ledger_user -d ledger_db -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null
+$COMPOSE exec -T db psql -U ledger_user -d ledger_db -c "CREATE DATABASE $TEST_DB OWNER ledger_user;" >/dev/null
 
 cleanup() {
-  $COMPOSE exec -T db psql -U recon -d ledger_db -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null 2>&1 || true
+  $COMPOSE exec -T db psql -U ledger_user -d ledger_db -c "DROP DATABASE IF EXISTS $TEST_DB;" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-if ! gunzip -c "$LATEST" | $COMPOSE exec -T db psql -U recon -d "$TEST_DB" >/dev/null; then
+if ! gunzip -c "$LATEST" | $COMPOSE exec -T db psql -U ledger_user -d "$TEST_DB" >/dev/null; then
   echo "VERIFY FAILED: restore into the test database errored" >&2
   exit 1
 fi
 
-ROWS=$($COMPOSE exec -T db psql -U recon -d "$TEST_DB" -tAc \
+ROWS=$($COMPOSE exec -T db psql -U ledger_user -d "$TEST_DB" -tAc \
   "SELECT count(*) FROM chart_of_accounts;" | tr -d '[:space:]')
 
 if [ -z "$ROWS" ] || [ "$ROWS" -lt 1 ]; then

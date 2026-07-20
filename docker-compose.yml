@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-recon}
+      POSTGRES_USER: ${POSTGRES_USER:-ledger_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-recon}
       POSTGRES_DB: ${POSTGRES_DB:-ledger_db}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recon}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ledger_user}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,7 +21,7 @@ services:
     image: ghcr.io/treasurer-cwmtc/cross-way-ledger-backend:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-recon}:${POSTGRES_PASSWORD:-recon}@db:5432/${POSTGRES_DB:-ledger_db}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ledger_user}:${POSTGRES_PASSWORD:-recon}@db:5432/${POSTGRES_DB:-ledger_db}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
       SECRET_KEY: ${SECRET_KEY:-change-me-to-a-long-random-secret}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}

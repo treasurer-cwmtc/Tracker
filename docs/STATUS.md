@@ -231,7 +231,7 @@ Default local-dev login: `admin` / `changeme` (or whatever `ADMIN_USERNAME`/
 
 ```bash
 docker compose up -d db
-DATABASE_URL=postgresql+psycopg://recon:recon@localhost:5432/ledger_db pytest
+DATABASE_URL=postgresql+psycopg://ledger_user:recon@localhost:5432/ledger_db pytest
 ```
 
 ---
