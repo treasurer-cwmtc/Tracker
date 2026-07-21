@@ -172,9 +172,9 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
           const labelText = (yPos: number, text: string, color: string) => (
             <>
               <rect
-                x={plotRight - 90}
+                x={plotRight - 150}
                 y={yPos - 12}
-                width={90}
+                width={150}
                 height={16}
                 fill="var(--card)"
                 opacity={0.9}
@@ -188,8 +188,8 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
             <>
               <circle cx={x(last.t)} cy={pledgedY} r={3.5} fill={COLOR_PLEDGED} />
               <circle cx={x(last.t)} cy={actualY} r={3.5} fill={COLOR_ACTUAL} />
-              {labelText(pledgedLabelY, fmtMoney(last.running_pledged_total), COLOR_PLEDGED)}
-              {labelText(actualLabelY, fmtMoney(last.running_actual_total), COLOR_ACTUAL)}
+              {labelText(pledgedLabelY, `Pledged: ${fmtMoney(last.running_pledged_total)}`, COLOR_PLEDGED)}
+              {labelText(actualLabelY, `Actual: ${fmtMoney(last.running_actual_total)}`, COLOR_ACTUAL)}
             </>
           );
         })()}

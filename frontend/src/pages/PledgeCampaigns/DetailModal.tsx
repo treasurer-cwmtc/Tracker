@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { pledgeCampaignsApi, CampaignDetail } from "../../api/pledgeCampaigns";
 import { donorsApi, Donor } from "../../api/donors";
 import DonorPicker from "./DonorPicker";
+import PledgePicker, { PledgeOption } from "./PledgePicker";
 
 function fmtMoney(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
@@ -17,12 +18,14 @@ export default function DetailModal({
   campaignId,
   detailKey,
   hideDonorNames,
+  pledgeOptions,
   onClose,
   onMatchChanged,
 }: {
   campaignId: number;
   detailKey: string;
   hideDonorNames: boolean;
+  pledgeOptions: PledgeOption[];
   onClose: () => void;
   onMatchChanged: () => void;
 }) {
@@ -164,9 +167,28 @@ export default function DetailModal({
             </table>
           </>
         ) : (
-          <p className="subtitle" style={{ marginTop: 0 }}>
-            No pledge on file - this giving isn't tied to a pledge form submission.
-          </p>
+          <div style={{ marginBottom: 16 }}>
+            <p className="subtitle" style={{ marginTop: 0 }}>
+              No pledge on file - this giving isn't tied to a pledge form submission.
+            </p>
+            {detail.donor_id && !hideDonorNames && (
+              <label className="field">
+                <span>Link this giving to a pledge (in case the automatic match missed it)</span>
+                <PledgePicker
+                  options={pledgeOptions}
+                  onChange={(pledgeId) =>
+                    pledgeCampaignsApi
+                      .setPledgeMatch(campaignId, pledgeId, detail.donor_id)
+                      .then(() => {
+                        onMatchChanged();
+                        onClose();
+                      })
+                      .catch((err) => setError((err as Error).message))
+                  }
+                />
+              </label>
+            )}
+          </div>
         )}
 
         <h4>Gift history (this fund)</h4>
