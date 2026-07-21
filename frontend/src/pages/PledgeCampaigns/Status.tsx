@@ -53,20 +53,18 @@ function ProgressBar({
 
   return (
     <div>
-      <div className="subtitle" style={{ fontWeight: 600, marginBottom: 4 }}>
-        {label}
-      </div>
+      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 6, color: "var(--text)" }}>{label}</div>
       <div className="goal-progress-track">
         <div className="goal-progress-fill" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <div className="goal-progress-label">
+      <div className="goal-progress-label" style={{ fontSize: 14.5 }}>
         <span>{valueLabel}</span>
         <span>
           {pctOfGoal}% of {fmtMoney(goal)} goal
         </span>
       </div>
       {note && (
-        <div className="subtitle" style={{ fontSize: 11.5, marginTop: 2 }}>
+        <div className="subtitle" style={{ fontSize: 13, marginTop: 3 }}>
           {note}
         </div>
       )}
@@ -189,14 +187,16 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
         {/* Goal reference line - label sits above the line with a background
             so it stays legible no matter what crosses behind it. */}
         <line x1={plotLeft} y1={goalY} x2={plotRight} y2={goalY} stroke={COLOR_GOAL} strokeDasharray="4 4" strokeWidth={1.5} />
-        <rect x={plotRight - 108} y={Math.max(goalY - 20, 2)} width={108} height={16} fill="var(--card)" opacity={0.9} />
-        <text x={plotRight} y={Math.max(goalY - 8, 14)} textAnchor="end" fontSize={11.5} fontWeight={600} fill={COLOR_GOAL}>
+        <rect x={plotRight - 130} y={Math.max(goalY - 21, 2)} width={130} height={18} fill="var(--card)" opacity={0.9} />
+        <text x={plotRight} y={Math.max(goalY - 8, 15)} textAnchor="end" fontSize={13} fontWeight={700} fill={COLOR_GOAL}>
           Goal: {fmtMoney(goal_amount)}
         </text>
 
-        {/* Cumulative pledged + actual lines */}
-        <path d={pledgedPath} fill="none" stroke={COLOR_PLEDGED} strokeWidth={2.5} />
-        <path d={actualPath} fill="none" stroke={COLOR_ACTUAL} strokeWidth={2.5} />
+        {/* Cumulative pledged + actual lines - rounded caps/joins so a
+            constant stroke width reads consistently across both flatter
+            and steeper stretches of the line. */}
+        <path d={pledgedPath} fill="none" stroke={COLOR_PLEDGED} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={actualPath} fill="none" stroke={COLOR_ACTUAL} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Latest-value labels at the last dot of each line. The last point
             always sits exactly at plotRight (it's "today"), so a label
@@ -217,14 +217,14 @@ function TimelineChart({ dashboard }: { dashboard: PledgeDashboard }) {
           const labelText = (yPos: number, text: string, color: string) => (
             <>
               <rect
-                x={plotRight - 150}
-                y={yPos - 12}
-                width={150}
-                height={16}
+                x={plotRight - 165}
+                y={yPos - 13}
+                width={165}
+                height={18}
                 fill="var(--card)"
                 opacity={0.9}
               />
-              <text x={plotRight - 4} y={yPos} textAnchor="end" fontSize={11.5} fontWeight={700} fill={color}>
+              <text x={plotRight - 4} y={yPos} textAnchor="end" fontSize={13} fontWeight={700} fill={color}>
                 {text}
               </text>
             </>
@@ -350,7 +350,7 @@ export default function PledgeCampaignStatus({ campaignId }: { campaignId: numbe
               valueLabel={`${fmtMoney(pledgedAndGiven)} pledged & given`}
               note={`${fmtMoney(dashboard.total_pledged)} pledged + ${fmtMoney(dashboard.unpledged_actual)} given without a pledge`}
               goal={dashboard.goal_amount}
-              color={COLOR_PLEDGED}
+              color={COLOR_ACTUAL}
             />
           </div>
         </div>
