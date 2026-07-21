@@ -29,52 +29,39 @@ const COLOR_PLEDGED = "var(--amber)";
 const COLOR_ACTUAL = "var(--primary)";
 const COLOR_GOAL = "var(--red)";
 
-/** A single-measure bullet chart (Few-style): a thin qualitative track, a
- * bolder bar for the measure (drawn from 0), and a target marker (a tick,
- * not a second bar) at the goal - one axis, one series, so no legend is
- * needed here (the label above names it). Kept as inline SVG, same
- * dependency-free approach as TimelineChart. */
-function BulletChart({ label, value, goal, color }: { label: string; value: number; goal: number; color: string }) {
-  const width = 300;
-  const trackH = 16;
-  const barH = 8;
-  const markerH = 26;
-  const scaleMax = Math.max(goal, value, 1) * 1.08;
-  const valueW = (value / scaleMax) * width;
-  const goalX = (goal / scaleMax) * width;
+/** Same plain progress-bar look as the original "Cash Received" bar, reused
+ * for "Pledged" too - just with its own label and fill color, so the two
+ * goal-progress panels read as a matched pair rather than two different
+ * chart styles. */
+function ProgressBar({
+  label,
+  value,
+  valueLabel,
+  goal,
+  color,
+}: {
+  label: string;
+  value: number;
+  valueLabel: string;
+  goal: number;
+  color: string;
+}) {
+  const pct = Math.min(goal ? (value / goal) * 100 : 0, 100);
   const pctOfGoal = goal ? Math.round((value / goal) * 100) : 0;
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, marginBottom: 4 }}>
-        <span style={{ fontWeight: 600 }}>{label}</span>
-        <span className="subtitle">
+      <div className="subtitle" style={{ fontWeight: 600, marginBottom: 4 }}>
+        {label}
+      </div>
+      <div className="goal-progress-track">
+        <div className="goal-progress-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <div className="goal-progress-label">
+        <span>{valueLabel}</span>
+        <span>
           {pctOfGoal}% of {fmtMoney(goal)} goal
         </span>
-      </div>
-      <svg viewBox={`0 0 ${width} ${markerH + 6}`} style={{ width: "100%", height: markerH + 6 }}>
-        <rect x={0} y={(markerH - trackH) / 2 + 3} width={width} height={trackH} rx={3} fill="var(--primary-light)" />
-        <rect
-          x={0}
-          y={(markerH - barH) / 2 + 3}
-          width={Math.max(valueW, 2)}
-          height={barH}
-          rx={2}
-          fill={color}
-        />
-        <rect x={Math.max(goalX - 1.5, 0)} y={3} width={3} height={markerH} fill={COLOR_GOAL} />
-      </svg>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          fontSize: 12.5,
-          color: "var(--muted)",
-          marginTop: 4,
-        }}
-      >
-        <span>{fmtMoney(value)}</span>
-        <span>Goal {fmtMoney(goal)}</span>
       </div>
     </div>
   );
@@ -330,31 +317,25 @@ export default function PledgeCampaignStatus({ campaignId }: { campaignId: numbe
   if (error) return <div className="error">{error}</div>;
   if (!dashboard) return <p className="subtitle">Loading…</p>;
 
-  const pct = Math.min(dashboard.percent_of_goal, 100);
-
   return (
     <div>
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Progress toward goal</h3>
         <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
           <div style={{ flex: "1 1 260px" }}>
-            <div className="subtitle" style={{ fontWeight: 600, marginBottom: 4 }}>
-              Cash Received
-            </div>
-            <div className="goal-progress-track">
-              <div className="goal-progress-fill" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="goal-progress-label">
-              <span>{fmtMoney(dashboard.total_actual)} raised</span>
-              <span>
-                {dashboard.percent_of_goal}% of {fmtMoney(dashboard.goal_amount)} goal
-              </span>
-            </div>
+            <ProgressBar
+              label="Cash Received"
+              value={dashboard.total_actual}
+              valueLabel={`${fmtMoney(dashboard.total_actual)} raised`}
+              goal={dashboard.goal_amount}
+              color={COLOR_ACTUAL}
+            />
           </div>
           <div style={{ flex: "1 1 260px" }}>
-            <BulletChart
+            <ProgressBar
               label="Pledged"
               value={dashboard.total_pledged}
+              valueLabel={`${fmtMoney(dashboard.total_pledged)} pledged`}
               goal={dashboard.goal_amount}
               color={COLOR_PLEDGED}
             />

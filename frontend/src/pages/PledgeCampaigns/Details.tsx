@@ -282,6 +282,17 @@ export default function Details({
             </tr>
           </thead>
           <tbody>
+            {visibleRows.length > 0 && (
+              <tr style={{ fontWeight: 700, background: "var(--primary-light)" }}>
+                <td>Total ({visibleRows.length})</td>
+                {!hideDonorNames && <td />}
+                {!hideDonorNames && <td />}
+                <td>{fmtMoney(visibleRows.reduce((sum, r) => sum + r.pledged_amount, 0))}</td>
+                <td>{fmtMoney(visibleRows.reduce((sum, r) => sum + r.actual_amount, 0))}</td>
+                <td />
+                {!hideDonorNames && <td />}
+              </tr>
+            )}
             {visibleRows.map((r) => (
               <tr
                 key={r.key}
