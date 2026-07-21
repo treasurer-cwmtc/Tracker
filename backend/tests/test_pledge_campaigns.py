@@ -313,6 +313,121 @@ def test_details_groups_unmatched_donation_into_none_donor_row():
     assert round(detail["gifts"][0]["net_amount"], 2) == 75.00
 
 
+def test_joint_giver_donations_fold_into_spouses_pledge():
+    """A household where one spouse pledges and the other gives under her
+    own donor record (e.g. Sajan pledges, Sindi gives) - the pledge's
+    Received Amount and gift history should include the spouse's giving,
+    since otherwise the pledge would show as unreceived even though the
+    household gave. Sindi must NOT also appear as her own separate
+    "gave without pledge" row - her giving is already reflected above."""
+    donors_csv = (
+        "donor_id,donor_number,donor_first_name,donor_last_name,donor_email,"
+        "donor_phone_number,donor_city,donor_state,donor_zip,joint_giver_id,"
+        "joint_giver_first_name,joint_giver_last_name,first_donated,donation_count,total\n"
+        "SAJ1,3001,Sajan,Thomas,sajan.jointtest@example.com,555-1,Frisco,TX,75034,"
+        "SIN1,Sindi,Thomas,2026-01-01,0,0.00\n"
+        "SIN1,3002,Sindi,Thomas,sindi.jointtest@example.com,555-2,Frisco,TX,75034,"
+        "SAJ1,Sajan,Thomas,2026-01-01,1,400.00\n"
+    )
+    donations_csv = (
+        "id,donor_id,received_date,fund,amount,net_amount,payment_method\n"
+        "jointgift1,SIN1,2026-02-01,Joint Fold Fund,400.00,400.00,ach\n"
+    )
+    campaign = _create_campaign(name="Joint Fold Campaign")
+    r = client.put(
+        f"/api/pledge-campaigns/{campaign['id']}", headers=auth_header(), json={"fund_name": "Joint Fold Fund"}
+    )
+    assert r.status_code == 200, r.text
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/donors", "donors.csv", donors_csv, "donor_file"
+    )
+    assert r.status_code == 200, r.text
+    r = _upload("/api/donations/import", "d.csv", donations_csv, "donation_file")
+    assert r.status_code == 200, r.text
+
+    sajan_pledge_csv = (
+        "Submission ID,First Name,Last Name,Email,Date Submitted,Initial Pledge,"
+        "To be paid by:,Monthly Pledge,Method of Contact\n"
+        "joint-sub,Sajan,Thomas,sajan.jointtest@example.com,2026-01-01,1000.00,2026-12-31,0.00,Email\n"
+    )
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/pledges",
+        "pledges.csv",
+        sajan_pledge_csv,
+        "pledge_file",
+        {"fund_name": "Joint Fold Fund"},
+    )
+    assert r.status_code == 200, r.text
+
+    h = auth_header()
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    assert len(details) == 1  # Sindi does NOT also show up as her own row
+    row = details[0]
+    assert row["donor_id"] == "SAJ1"
+    assert row["has_pledge"] is True
+    assert round(row["actual_amount"], 2) == 400.00  # Sindi's gift, folded in
+    assert row["joint_giver_id"] == "SIN1"
+    assert row["joint_giver_first_name"] == "Sindi"
+
+    detail = client.get(f"/api/pledge-campaigns/{campaign['id']}/details/{row['key']}", headers=h).json()
+    assert detail["joint_giver_id"] == "SIN1"
+    assert len(detail["gifts"]) == 1
+    assert detail["gifts"][0]["donor_id"] == "SIN1"
+    assert round(detail["gifts"][0]["net_amount"], 2) == 400.00
+
+
+def test_joint_giver_not_folded_when_spouse_has_own_pledge():
+    """If BOTH spouses submit their own pledge, folding one's gift into the
+    other's pledge would be ambiguous - each pledge must keep its own
+    actual_amount independently, with no folding either direction."""
+    donors_csv = (
+        "donor_id,donor_number,donor_first_name,donor_last_name,donor_email,"
+        "donor_phone_number,donor_city,donor_state,donor_zip,joint_giver_id,"
+        "joint_giver_first_name,joint_giver_last_name,first_donated,donation_count,total\n"
+        "SAJ2,3003,Sajan,Two,sajan.bothpledge@example.com,555-3,Frisco,TX,75034,"
+        "SIN2,Sindi,Two,2026-01-01,0,0.00\n"
+        "SIN2,3004,Sindi,Two,sindi.bothpledge@example.com,555-4,Frisco,TX,75034,"
+        "SAJ2,Sajan,Two,2026-01-01,1,400.00\n"
+    )
+    donations_csv = (
+        "id,donor_id,received_date,fund,amount,net_amount,payment_method\n"
+        "bothgift1,SIN2,2026-02-01,Both Pledge Fund,400.00,400.00,ach\n"
+    )
+    campaign = _create_campaign(name="Both Pledge Campaign")
+    r = client.put(
+        f"/api/pledge-campaigns/{campaign['id']}", headers=auth_header(), json={"fund_name": "Both Pledge Fund"}
+    )
+    assert r.status_code == 200, r.text
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/donors", "donors.csv", donors_csv, "donor_file"
+    )
+    assert r.status_code == 200, r.text
+    r = _upload("/api/donations/import", "d.csv", donations_csv, "donation_file")
+    assert r.status_code == 200, r.text
+
+    both_pledges_csv = (
+        "Submission ID,First Name,Last Name,Email,Date Submitted,Initial Pledge,"
+        "To be paid by:,Monthly Pledge,Method of Contact\n"
+        "both-sub1,Sajan,Two,sajan.bothpledge@example.com,2026-01-01,1000.00,2026-12-31,0.00,Email\n"
+        "both-sub2,Sindi,Two,sindi.bothpledge@example.com,2026-01-02,500.00,2026-12-31,0.00,Email\n"
+    )
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/pledges",
+        "pledges.csv",
+        both_pledges_csv,
+        "pledge_file",
+        {"fund_name": "Both Pledge Fund"},
+    )
+    assert r.status_code == 200, r.text
+
+    h = auth_header()
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    assert len(details) == 2  # both pledges, no folding, no extra donor row
+    by_donor = {r["donor_id"]: r for r in details}
+    assert round(by_donor["SAJ2"]["actual_amount"], 2) == 0.00
+    assert round(by_donor["SIN2"]["actual_amount"], 2) == 400.00
+
+
 def test_delete_fund_removes_only_that_funds_donations():
     # Self-contained fund name so this doesn't depend on test ordering /
     # other tests' shared donations still being present.

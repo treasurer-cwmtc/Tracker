@@ -639,7 +639,14 @@ class CampaignDetailRow(BaseModel):
     0 and no due_date, so their giving still shows up somewhere. donor_id
     is None only for donations that never matched any donor record at all
     (grouped into one row so the numbers still reconcile to the dashboard
-    total, even though there's no single person to attribute them to)."""
+    total, even though there's no single person to attribute them to).
+
+    When the matched donor has a joint_giver_id and that spouse has no
+    pledge of their own in this campaign, actual_amount and the gift-history
+    popup fold in the joint giver's donations too - a household where one
+    spouse pledges and the other gives shouldn't show the pledge as
+    "unreceived" just because the money came in under the spouse's own
+    donor record."""
 
     key: str  # "pledge:<id>" or "donor:<donor_id-or-'none'>" - opaque, passed back to get_detail
     donor_id: str | None
@@ -650,6 +657,9 @@ class CampaignDetailRow(BaseModel):
     actual_amount: float
     due_date: date | None
     has_pledge: bool
+    joint_giver_id: str
+    joint_giver_first_name: str
+    joint_giver_last_name: str
     source_file_name: str
     source_file_link: str
 
@@ -658,10 +668,15 @@ class CampaignDetailOut(BaseModel):
     """Full detail for the Details tab's click-to-expand popup: the pledge
     (if this row has one) plus every individual gift (this fund only) from
     the matched donor - not just the aggregate totals already on
-    CampaignDetailRow, since the popup shows a real date-by-date history."""
+    CampaignDetailRow, since the popup shows a real date-by-date history.
+    Gifts include the joint giver's donations too, under the same fold rule
+    as CampaignDetailRow.actual_amount."""
 
     pledge: PledgeOut | None
     donor_id: str | None
+    joint_giver_id: str
+    joint_giver_first_name: str
+    joint_giver_last_name: str
     first_name: str
     last_name: str
     email: str
