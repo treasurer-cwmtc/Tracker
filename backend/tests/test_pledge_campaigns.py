@@ -125,6 +125,9 @@ def test_pledge_import_donor_match_and_dashboard():
     assert dashboard["donation_count"] == 3  # only Building Fund donations
     assert round(dashboard["total_pledged"], 2) == 1500.00
     assert round(dashboard["total_actual"], 2) == 348.50
+    # Every Building Fund donor here (DON1, DON2) has a matching pledge, so
+    # there's no unpledged giving to add on top of total_pledged.
+    assert round(dashboard["unpledged_actual"], 2) == 0.00
     # total_raised includes starting_balance, but the timeline must not.
     assert round(dashboard["total_raised"], 2) == 448.50
     final_point = dashboard["timeline"][-1]
@@ -426,6 +429,55 @@ def test_joint_giver_not_folded_when_spouse_has_own_pledge():
     by_donor = {r["donor_id"]: r for r in details}
     assert round(by_donor["SAJ2"]["actual_amount"], 2) == 0.00
     assert round(by_donor["SIN2"]["actual_amount"], 2) == 400.00
+
+
+def test_dashboard_counts_unpledged_giving_toward_goal():
+    """Someone who gave without ever submitting a pledge (e.g. Lijoy gives
+    $22,000 with no pledge on file) still counts toward the goal - money
+    already in hand is at least as strong a commitment as a pledge, so
+    unpledged_actual should reflect their gift on top of total_pledged."""
+    donors_csv = (
+        "donor_id,donor_number,donor_first_name,donor_last_name,donor_email,"
+        "donor_phone_number,donor_city,donor_state,donor_zip,joint_giver_id,"
+        "joint_giver_first_name,joint_giver_last_name,first_donated,donation_count,total\n"
+        "GIVERONLY,4001,Lijoy,Test,lijoy.test@example.com,555-9,Murphy,TX,75094,,,,2026-01-01,1,22000.00\n"
+    )
+    donations_csv = (
+        "id,donor_id,received_date,fund,amount,net_amount,payment_method\n"
+        "unpledgedgift1,GIVERONLY,2026-03-01,Unpledged Goal Fund,22000.00,22000.00,ach\n"
+    )
+    campaign = _create_campaign(name="Unpledged Goal Campaign", goal=100000.0)
+    r = client.put(
+        f"/api/pledge-campaigns/{campaign['id']}", headers=auth_header(),
+        json={"fund_name": "Unpledged Goal Fund"},
+    )
+    assert r.status_code == 200, r.text
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/donors", "donors.csv", donors_csv, "donor_file"
+    )
+    assert r.status_code == 200, r.text
+    r = _upload("/api/donations/import", "d.csv", donations_csv, "donation_file")
+    assert r.status_code == 200, r.text
+
+    # A separate person DOES pledge, so total_pledged isn't zero either.
+    pledge_csv = (
+        "Submission ID,First Name,Last Name,Email,Date Submitted,Initial Pledge,"
+        "To be paid by:,Monthly Pledge,Method of Contact\n"
+        "unpledged-goal-sub,Someone,Else,someone.else@example.com,2026-01-01,5000.00,2026-12-31,0.00,Email\n"
+    )
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/pledges",
+        "pledges.csv",
+        pledge_csv,
+        "pledge_file",
+        {"fund_name": "Unpledged Goal Fund"},
+    )
+    assert r.status_code == 200, r.text
+
+    h = auth_header()
+    dashboard = client.get(f"/api/pledge-campaigns/{campaign['id']}/dashboard", headers=h).json()
+    assert round(dashboard["total_pledged"], 2) == 5000.00
+    assert round(dashboard["unpledged_actual"], 2) == 22000.00
 
 
 def test_delete_fund_removes_only_that_funds_donations():

@@ -574,6 +574,25 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
     total_raised = round(campaign.starting_balance + total_actual, 2)
     goal = campaign.goal_amount
 
+    # Money already given by someone who never submitted a pledge (e.g.
+    # Lijoy gave $22,000 but has no pledge on file) still counts toward the
+    # goal - it's already in hand, which is a stronger commitment than a
+    # pledge. Uses the same donor-matched/joint-giver-folded exclusion set
+    # as the Details tab so this never double-counts a gift that's already
+    # folded into someone else's pledge total.
+    donors_by_id = {d.donor_id: d for d in db.scalars(select(Donor))}
+    matched_donor_ids = _campaign_matched_donor_ids(db, campaign_id)
+    folded_donor_ids = {
+        jg_id
+        for donor_id in matched_donor_ids
+        if (jg_id := _joint_giver_donor_id(donors_by_id, donor_id, matched_donor_ids))
+    }
+    excluded_donor_ids = matched_donor_ids | folded_donor_ids
+    totals_by_donor_or_none = _donation_totals_by_donor_or_none(db, campaign.fund_name)
+    unpledged_actual = round(
+        sum(v for k, v in totals_by_donor_or_none.items() if k not in excluded_donor_ids), 2
+    )
+
     # One point per day that had EITHER a pledge submission or a donation -
     # not just donation dates, so there's more to see on the x-axis than a
     # sparse "only when money actually arrived" line. Both running totals
@@ -617,6 +636,7 @@ def get_dashboard(campaign_id: int, db: Session = Depends(get_db)) -> PledgeDash
         total_pledged=total_pledged,
         total_actual=total_actual,
         total_raised=total_raised,
+        unpledged_actual=unpledged_actual,
         pledge_count=len(pledges),
         donation_count=len(donations),
         goal_amount=goal,

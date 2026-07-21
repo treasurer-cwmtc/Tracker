@@ -701,6 +701,11 @@ class PledgeDashboardOut(BaseModel):
     total_pledged: float
     total_actual: float
     total_raised: float
+    # Money already given by someone with no pledge on file (e.g. a $22,000
+    # gift with no matching pledge) - counted toward the goal alongside
+    # total_pledged, since money already in hand is at least as strong a
+    # commitment as a pledge.
+    unpledged_actual: float
     pledge_count: int
     donation_count: int
     goal_amount: float
