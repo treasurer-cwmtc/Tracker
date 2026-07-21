@@ -114,10 +114,10 @@ def test_pledge_import_donor_match_and_dashboard():
     assert donor_result["pledges_matched"] == 2  # both emails now resolve
 
     h = auth_header()
-    pledges = client.get(f"/api/pledge-campaigns/{campaign['id']}/pledges", headers=h).json()
-    jane = next(p for p in pledges if p["email"] == "jane@example.com")
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    jane = next(r for r in details if r["email"] == "jane@example.com")
     assert jane["donor_id"] == "DON1"
-    assert jane["match_source"] == "auto"
+    assert jane["has_pledge"] is True
     assert round(jane["actual_amount"], 2) == 298.50  # d1 + d2, this fund only
 
     dashboard = client.get(f"/api/pledge-campaigns/{campaign['id']}/dashboard", headers=h).json()
@@ -175,12 +175,14 @@ def test_manual_match_and_pledge_detail_popup():
     assert r.status_code == 200, r.text
 
     h = auth_header()
-    pledges = client.get(f"/api/pledge-campaigns/{campaign['id']}/pledges", headers=h).json()
-    unmatched = next(p for p in pledges if p["email"] == "no-match-yet@example.com")
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    unmatched = next(r for r in details if r["email"] == "no-match-yet@example.com")
     assert unmatched["donor_id"] is None
+    assert unmatched["has_pledge"] is True
+    pledge_id = int(unmatched["key"].removeprefix("pledge:"))
 
     r = client.put(
-        f"/api/pledge-campaigns/{campaign['id']}/pledges/{unmatched['id']}/match",
+        f"/api/pledge-campaigns/{campaign['id']}/pledges/{pledge_id}/match",
         headers=h,
         json={"donor_id": "DON1"},
     )
@@ -189,7 +191,7 @@ def test_manual_match_and_pledge_detail_popup():
     assert round(r.json()["actual_amount"], 2) == 298.50
 
     detail = client.get(
-        f"/api/pledge-campaigns/{campaign['id']}/pledges/{unmatched['id']}", headers=h
+        f"/api/pledge-campaigns/{campaign['id']}/details/{unmatched['key']}", headers=h
     ).json()
     assert detail["pledge"]["donor_id"] == "DON1"
     assert len(detail["gifts"]) == 2
@@ -215,17 +217,12 @@ def test_donor_name_redacted_when_hide_donor_names_set():
     assert r.status_code == 200, r.text
     assert r.json()["hide_donor_names"] is True
 
-    pledges = client.get(f"/api/pledge-campaigns/{campaign['id']}/pledges", headers=h).json()
-    jane = next(p for p in pledges if p["donor_id"] == "DON1")
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    jane = next(r for r in details if r["donor_id"] == "DON1")
     assert jane["first_name"] == ""
     assert jane["last_name"] == ""
     assert jane["email"] == ""
     assert jane["donor_id"] == "DON1"  # not redacted - it's an identifier, not PII display
-
-    donations = client.get(f"/api/pledge-campaigns/{campaign['id']}/donations", headers=h).json()
-    d1 = next(d for d in donations if d["donor_id"] == "DON1")
-    assert d1["donor_first_name"] == ""
-    assert d1["donor_last_name"] == ""
 
     # Turn it back off so it doesn't leak into other tests sharing this admin account.
     client.put(
@@ -235,17 +232,85 @@ def test_donor_name_redacted_when_hide_donor_names_set():
     )
 
 
-def test_donations_list_resolves_donor_identity():
-    _import_donations()
-    campaign = _create_campaign(name="Actuals Campaign")
-    _import_pledges(campaign["id"])
-    _import_donors(campaign["id"])
+def test_details_resolves_pledge_donor_and_includes_giver_without_pledge():
+    """The combined Details tab must show both: a pledge matched to its
+    donor, and someone who gave to this fund but never submitted a pledge
+    form at all - their giving still has to show up somewhere. Uses its
+    own fund/donor/campaign so it doesn't depend on the shared fixture
+    donors, all of whom happen to have a matching pledge."""
+    donations_csv = (
+        "id,donor_id,received_date,fund,amount,net_amount,payment_method\n"
+        "giveonly1,DON-NOPLEDGE,2026-04-05,No Pledge Fund,50.00,50.00,check\n"
+    )
+    r = _upload("/api/donations/import", "d.csv", donations_csv, "donation_file")
+    assert r.status_code == 200, r.text
+
+    donors_csv = (
+        "donor_id,donor_number,donor_first_name,donor_last_name,donor_email,"
+        "donor_phone_number,donor_city,donor_state,donor_zip,joint_giver_id,"
+        "joint_giver_first_name,joint_giver_last_name,first_donated,donation_count,total\n"
+        "DON-NOPLEDGE,2001,Priya,Varkey,priya.varkey@example.com,555-3333,Plano,TX,75023,,,,2026-04-05,1,50.00\n"
+    )
+    campaign = _create_campaign(name="No Pledge Fund Campaign")
+    r = client.put(
+        f"/api/pledge-campaigns/{campaign['id']}", headers=auth_header(),
+        json={"fund_name": "No Pledge Fund"},
+    )
+    assert r.status_code == 200, r.text
+    r = _upload(
+        f"/api/pledge-campaigns/{campaign['id']}/import/donors", "donors.csv", donors_csv, "donor_file"
+    )
+    assert r.status_code == 200, r.text
 
     h = auth_header()
-    donations = client.get(f"/api/pledge-campaigns/{campaign['id']}/donations", headers=h).json()
-    d1 = next(d for d in donations if d["donor_id"] == "DON1")
-    assert d1["donor_first_name"] == "Jane"
-    assert d1["donor_last_name"] == "Doe"
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    assert len(details) == 1
+    giver_only = details[0]
+    assert giver_only["has_pledge"] is False
+    assert giver_only["pledged_amount"] == 0.0
+    assert giver_only["due_date"] is None
+    assert giver_only["donor_id"] == "DON-NOPLEDGE"
+    assert giver_only["first_name"] == "Priya"
+    assert giver_only["last_name"] == "Varkey"
+    assert round(giver_only["actual_amount"], 2) == 50.00
+
+    detail = client.get(
+        f"/api/pledge-campaigns/{campaign['id']}/details/{giver_only['key']}", headers=h
+    ).json()
+    assert detail["pledge"] is None
+    assert detail["donor_id"] == "DON-NOPLEDGE"
+    assert len(detail["gifts"]) == 1
+
+
+def test_details_groups_unmatched_donation_into_none_donor_row():
+    """A donation with no donor_id at all (the Giving App export can leave
+    this blank) must still show up on the Details tab, grouped under one
+    donor_id=None row, instead of being silently dropped from the total."""
+    csv_text = (
+        "id,donor_id,received_date,fund,amount,net_amount,payment_method\n"
+        "unmatched1,,2026-04-01,Unmatched Fund,75.00,75.00,check\n"
+    )
+    r = _upload("/api/donations/import", "u.csv", csv_text, "donation_file")
+    assert r.status_code == 200, r.text
+
+    campaign = _create_campaign(name="Unmatched Fund Campaign")
+    r = client.put(
+        f"/api/pledge-campaigns/{campaign['id']}", headers=auth_header(), json={"fund_name": "Unmatched Fund"}
+    )
+    assert r.status_code == 200, r.text
+
+    h = auth_header()
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    assert len(details) == 1
+    row = details[0]
+    assert row["donor_id"] is None
+    assert row["has_pledge"] is False
+    assert round(row["actual_amount"], 2) == 75.00
+
+    detail = client.get(f"/api/pledge-campaigns/{campaign['id']}/details/{row['key']}", headers=h).json()
+    assert detail["pledge"] is None
+    assert len(detail["gifts"]) == 1
+    assert round(detail["gifts"][0]["net_amount"], 2) == 75.00
 
 
 def test_delete_fund_removes_only_that_funds_donations():
@@ -312,5 +377,10 @@ def test_source_file_reference_stored_on_import():
     )
     assert r.status_code == 200, r.text
 
-    donations = client.get(f"/api/pledge-campaigns/{campaign['id']}/donations", headers=h).json()
-    assert any(d["source_file_name"] == "2026-05-01_donations.csv" for d in donations)
+    # DONX never matches a pledge or a donor record, so it surfaces as its
+    # own row - the donation itself (not the row, which has no single file
+    # once multiple donations could roll up into it) carries the source file.
+    details = client.get(f"/api/pledge-campaigns/{campaign['id']}/details", headers=h).json()
+    donx_row = next(r for r in details if r["donor_id"] == "DONX")
+    detail = client.get(f"/api/pledge-campaigns/{campaign['id']}/details/{donx_row['key']}", headers=h).json()
+    assert detail["gifts"][0]["source_file_name"] == "2026-05-01_donations.csv"

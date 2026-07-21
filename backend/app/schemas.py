@@ -612,12 +612,39 @@ class DonationOut(BaseModel):
     source_file_link: str
 
 
-class PledgeDetailOut(BaseModel):
-    """Full detail for the Pledges tab's click-to-expand popup: the pledge
-    itself, plus every individual gift (this fund only) from the donor it's
-    matched to - not just the aggregate total already on PledgeOut."""
+class CampaignDetailRow(BaseModel):
+    """One row of the combined Details tab: either a pledge (has_pledge
+    True, with its due_date) or - for someone who gave to this fund but
+    never submitted a pledge form - a synthesized row with pledged_amount
+    0 and no due_date, so their giving still shows up somewhere. donor_id
+    is None only for donations that never matched any donor record at all
+    (grouped into one row so the numbers still reconcile to the dashboard
+    total, even though there's no single person to attribute them to)."""
 
-    pledge: PledgeOut
+    key: str  # "pledge:<id>" or "donor:<donor_id-or-'none'>" - opaque, passed back to get_detail
+    donor_id: str | None
+    first_name: str
+    last_name: str
+    email: str
+    pledged_amount: float
+    actual_amount: float
+    due_date: date | None
+    has_pledge: bool
+    source_file_name: str
+    source_file_link: str
+
+
+class CampaignDetailOut(BaseModel):
+    """Full detail for the Details tab's click-to-expand popup: the pledge
+    (if this row has one) plus every individual gift (this fund only) from
+    the matched donor - not just the aggregate totals already on
+    CampaignDetailRow, since the popup shows a real date-by-date history."""
+
+    pledge: PledgeOut | None
+    donor_id: str | None
+    first_name: str
+    last_name: str
+    email: str
     gifts: list[DonationOut]
 
 

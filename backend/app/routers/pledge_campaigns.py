@@ -5,9 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..deps import get_current_user, require_permission
+from ..deps import get_current_user, require_any_permission, require_permission
 from ..models import Donation, Donor, Pledge, PledgeCampaign, PledgeDonorMatch, User
 from ..schemas import (
+    CampaignDetailOut,
+    CampaignDetailRow,
     DonationOut,
     DonorImportSummary,
     PledgeCampaignCreate,
@@ -15,7 +17,6 @@ from ..schemas import (
     PledgeCampaignUpdate,
     PledgeDashboardOut,
     PledgeDashboardPoint,
-    PledgeDetailOut,
     PledgeImportSummary,
     PledgeMatchUpdate,
     PledgeOut,
@@ -250,6 +251,16 @@ def _donation_totals_by_donor(db: Session, fund_name: str) -> dict[str, float]:
     return totals
 
 
+def _donation_totals_by_donor_or_none(db: Session, fund_name: str) -> dict[str | None, float]:
+    """Same as _donation_totals_by_donor but keeps a None-keyed bucket for
+    donations that never matched any donor record, so the Details tab can
+    still surface that money instead of silently dropping it."""
+    totals: dict[str | None, float] = {}
+    for donation in db.scalars(select(Donation).where(Donation.fund == fund_name)):
+        totals[donation.donor_id] = totals.get(donation.donor_id, 0.0) + donation.net_amount
+    return totals
+
+
 def _pledge_out(p: Pledge, match: PledgeDonorMatch | None, actual_amount: float, redact: bool) -> PledgeOut:
     """Build a PledgeOut, redacting the donor's name/email (real PII) to ""
     for a user with hide_donor_names set. Everything else - donor_id,
@@ -292,29 +303,6 @@ def _donation_out(d: Donation, donor: Donor | None, redact: bool) -> DonationOut
     )
 
 
-@router.get(
-    "/{campaign_id}/pledges", response_model=list[PledgeOut],
-    dependencies=[Depends(require_permission("pledge-campaign-pledges"))],
-)
-def list_pledges(
-    campaign_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
-) -> list[PledgeOut]:
-    campaign = _get_campaign(db, campaign_id)
-    totals_by_donor = _donation_totals_by_donor(db, campaign.fund_name)
-    pledges = db.scalars(
-        select(Pledge)
-        .where(Pledge.campaign_id == campaign_id)
-        .order_by(Pledge.due_date.asc().nulls_last())
-    )
-    return [
-        _pledge_out(
-            p, p.match, totals_by_donor.get(p.match.donor_id, 0.0) if p.match and p.match.donor_id else 0.0,
-            user.hide_donor_names,
-        )
-        for p in pledges
-    ]
-
-
 @router.put(
     "/{campaign_id}/pledges/{pledge_id}/match", response_model=PledgeOut,
     dependencies=[Depends(require_permission("pledge-campaign-pledges"))],
@@ -349,63 +337,134 @@ def set_pledge_match(
 
 
 @router.get(
-    "/{campaign_id}/pledges/{pledge_id}", response_model=PledgeDetailOut,
-    dependencies=[Depends(require_permission("pledge-campaign-pledges"))],
+    "/{campaign_id}/details", response_model=list[CampaignDetailRow],
+    dependencies=[Depends(require_any_permission("pledge-campaign-pledges", "pledge-campaign-actuals"))],
 )
-def get_pledge_detail(
-    campaign_id: int,
-    pledge_id: int,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> PledgeDetailOut:
-    """Full detail for the click-to-expand popup on the Pledges tab: the
-    pledge itself, plus every individual gift (this fund only) from the
-    matched donor - not just the aggregate `actual_amount` already on
-    PledgeOut, since the popup shows a real date-by-date gift history."""
+def list_details(
+    campaign_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> list[CampaignDetailRow]:
+    """One row per pledge, PLUS a synthesized row for every donor who gave
+    to this fund but never submitted a pledge - so giving from people who
+    didn't pledge still shows up (pledged_amount 0, has_pledge False, no
+    due_date). Donations that never matched any donor at all are grouped
+    into one donor_id=None row so their total still reconciles against the
+    dashboard's total_actual instead of silently disappearing."""
     campaign = _get_campaign(db, campaign_id)
-    pledge = db.get(Pledge, pledge_id)
-    if pledge is None or pledge.campaign_id != campaign_id:
-        raise HTTPException(404, "Pledge not found.")
+    redact = user.hide_donor_names
+    totals_by_donor = _donation_totals_by_donor_or_none(db, campaign.fund_name)
+    donors_by_id = {d.donor_id: d for d in db.scalars(select(Donor))}
 
-    match = pledge.match
-    donor_id = match.donor_id if match else None
-    gifts: list[Donation] = []
-    if donor_id:
-        gifts = list(
-            db.scalars(
-                select(Donation)
-                .where(Donation.fund == campaign.fund_name, Donation.donor_id == donor_id)
-                .order_by(Donation.received_date.asc().nulls_last())
+    pledges = list(
+        db.scalars(select(Pledge).where(Pledge.campaign_id == campaign_id))
+    )
+    matched_donor_ids: set[str] = set()
+    rows: list[CampaignDetailRow] = []
+    for p in pledges:
+        match = p.match
+        donor_id = match.donor_id if match and match.donor_id else None
+        if donor_id:
+            matched_donor_ids.add(donor_id)
+        rows.append(
+            CampaignDetailRow(
+                key=f"pledge:{p.id}",
+                donor_id=donor_id,
+                first_name="" if redact else p.first_name,
+                last_name="" if redact else p.last_name,
+                email="" if redact else p.email,
+                pledged_amount=p.initial_amount,
+                actual_amount=totals_by_donor.get(donor_id, 0.0) if donor_id else 0.0,
+                due_date=p.due_date,
+                has_pledge=True,
+                source_file_name=p.source_file_name,
+                source_file_link=p.source_file_link,
             )
         )
-    total = round(sum(g.net_amount for g in gifts), 2)
-    donor = db.get(Donor, donor_id) if donor_id else None
-    return PledgeDetailOut(
-        pledge=_pledge_out(pledge, match, total, user.hide_donor_names),
-        gifts=[_donation_out(g, donor, user.hide_donor_names) for g in gifts],
-    )
+
+    for donor_id, total in totals_by_donor.items():
+        if donor_id is not None and donor_id in matched_donor_ids:
+            continue
+        donor = donors_by_id.get(donor_id) if donor_id else None
+        rows.append(
+            CampaignDetailRow(
+                key=f"donor:{donor_id or 'none'}",
+                donor_id=donor_id,
+                first_name="" if redact or donor is None else donor.first_name,
+                last_name="" if redact or donor is None else donor.last_name,
+                email="" if redact or donor is None else donor.email,
+                pledged_amount=0.0,
+                actual_amount=round(total, 2),
+                due_date=None,
+                has_pledge=False,
+                source_file_name=donor.source_file_name if donor else "",
+                source_file_link=donor.source_file_link if donor else "",
+            )
+        )
+
+    rows.sort(key=lambda r: (r.due_date is None, r.due_date or date.max))
+    return rows
 
 
 @router.get(
-    "/{campaign_id}/donations", response_model=list[DonationOut],
-    dependencies=[Depends(require_permission("pledge-campaign-actuals"))],
+    "/{campaign_id}/details/{key}", response_model=CampaignDetailOut,
+    dependencies=[Depends(require_any_permission("pledge-campaign-pledges", "pledge-campaign-actuals"))],
 )
-def list_donations(
-    campaign_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
-) -> list[DonationOut]:
+def get_detail(
+    campaign_id: int,
+    key: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> CampaignDetailOut:
+    """Full detail for the Details tab's click-to-expand popup, for either
+    kind of row: a pledge (key "pledge:<id>"), or a pledge-less giver (key
+    "donor:<donor_id>" or "donor:none" for the unmatched-donation bucket)."""
     campaign = _get_campaign(db, campaign_id)
-    donations = list(
+    redact = user.hide_donor_names
+
+    if key.startswith("pledge:"):
+        pledge = db.get(Pledge, int(key.removeprefix("pledge:")))
+        if pledge is None or pledge.campaign_id != campaign_id:
+            raise HTTPException(404, "Pledge not found.")
+        match = pledge.match
+        donor_id = match.donor_id if match and match.donor_id else None
+        gifts = _donation_history(db, campaign.fund_name, donor_id)
+        total = round(sum(g.net_amount for g in gifts), 2)
+        donor = db.get(Donor, donor_id) if donor_id else None
+        pledge_out = _pledge_out(pledge, match, total, redact)
+        return CampaignDetailOut(
+            pledge=pledge_out,
+            donor_id=donor_id,
+            first_name=pledge_out.first_name,
+            last_name=pledge_out.last_name,
+            email=pledge_out.email,
+            gifts=[_donation_out(g, donor, redact) for g in gifts],
+        )
+
+    if key.startswith("donor:"):
+        raw = key.removeprefix("donor:")
+        donor_id = None if raw == "none" else raw
+        gifts = _donation_history(db, campaign.fund_name, donor_id)
+        donor = db.get(Donor, donor_id) if donor_id else None
+        return CampaignDetailOut(
+            pledge=None,
+            donor_id=donor_id,
+            first_name="" if redact or donor is None else donor.first_name,
+            last_name="" if redact or donor is None else donor.last_name,
+            email="" if redact or donor is None else donor.email,
+            gifts=[_donation_out(g, donor, redact) for g in gifts],
+        )
+
+    raise HTTPException(404, "Unknown detail key.")
+
+
+def _donation_history(db: Session, fund_name: str, donor_id: str | None) -> list[Donation]:
+    donor_filter = Donation.donor_id.is_(None) if donor_id is None else Donation.donor_id == donor_id
+    return list(
         db.scalars(
             select(Donation)
-            .where(Donation.fund == campaign.fund_name)
+            .where(Donation.fund == fund_name, donor_filter)
             .order_by(Donation.received_date.asc().nulls_last())
         )
     )
-    donors_by_id = {d.donor_id: d for d in db.scalars(select(Donor))}
-    return [
-        _donation_out(d, donors_by_id.get(d.donor_id) if d.donor_id else None, user.hide_donor_names)
-        for d in donations
-    ]
 
 
 @router.get(
