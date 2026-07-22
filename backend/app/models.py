@@ -297,7 +297,10 @@ class ReconciliationEntry(Base):
     check_invoice_name: Mapped[str] = mapped_column(String(200), default="")
     bank_description: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(String(300), default="")
-    dedup_key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    # 1500, not 300 - falls back to the full (unbounded Text) bank_description
+    # when there's no check/invoice name, and some Chase ACH descriptor lines
+    # run past 300 characters on their own (see build_dedup_key).
+    dedup_key: Mapped[str] = mapped_column(String(1500), unique=True, index=True)
     source_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("recon_runs.id"), nullable=True
     )

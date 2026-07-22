@@ -56,9 +56,11 @@ def build_dedup_key(
     check number) is preferred since it's closest to a true external id;
     Bank Description is the fallback for plain bank lines.
 
-    Truncated to fit the dedup_key column (String(300)) - Bank Description is
-    an unbounded Text field on the source row and some Chase ACH descriptor
-    lines run well past 300 characters on their own."""
-    key_text = (check_invoice_name or bank_description or "").strip().lower()[:250]
+    Capped well above any real bank description length (see dedup_key's
+    String(1500) column) purely as a defense-in-depth backstop, not as the
+    primary fix - Bank Description is an unbounded Text field on the source
+    row, so relying on truncation alone would risk two distinct long
+    descriptions colliding on their common prefix."""
+    key_text = (check_invoice_name or bank_description or "").strip().lower()[:1450]
     date_part = transaction_date.isoformat() if transaction_date else ""
     return f"{date_part}|{round(amount, 2)}|{key_text}"

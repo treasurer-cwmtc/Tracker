@@ -10,14 +10,16 @@ FIXTURES = Path(__file__).parent
 
 
 def test_build_dedup_key_fits_column_even_for_long_bank_descriptions():
-    # dedup_key is a String(300) column, but bank_description (the fallback
+    # dedup_key is a String(1500) column, but bank_description (the fallback
     # when there's no check/invoice name) is unbounded Text - a long Chase
     # ACH descriptor line (as seen with Stripe payout lines) must not blow
-    # past the column limit and fail the batch insert.
-    long_description = "ORIG CO NAME:STRIPE" + " X" * 200 + " TRN: 0064758960TC"
-    assert len(long_description) > 300
+    # past the column limit and fail the batch insert. 1500 comfortably
+    # covers any real bank description; the truncation below is only a
+    # defense-in-depth backstop against a pathologically long one.
+    long_description = "ORIG CO NAME:STRIPE" + " X" * 1000 + " TRN: 0064758960TC"
+    assert len(long_description) > 1500
     key = build_dedup_key(date(2026, 3, 30), -40.0, "", long_description)
-    assert len(key) <= 300
+    assert len(key) <= 1500
 
 
 def _run_upload() -> int:
