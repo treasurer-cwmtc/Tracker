@@ -1,10 +1,23 @@
 """Reconciliation ledger tests: import-from-run dedup, editing, listing."""
 
+from datetime import date
 from pathlib import Path
 
+from app.services.ledger import build_dedup_key
 from test_auth import auth_header, client  # reuse the shared TestClient/app setup
 
 FIXTURES = Path(__file__).parent
+
+
+def test_build_dedup_key_fits_column_even_for_long_bank_descriptions():
+    # dedup_key is a String(300) column, but bank_description (the fallback
+    # when there's no check/invoice name) is unbounded Text - a long Chase
+    # ACH descriptor line (as seen with Stripe payout lines) must not blow
+    # past the column limit and fail the batch insert.
+    long_description = "ORIG CO NAME:STRIPE" + " X" * 200 + " TRN: 0064758960TC"
+    assert len(long_description) > 300
+    key = build_dedup_key(date(2026, 3, 30), -40.0, "", long_description)
+    assert len(key) <= 300
 
 
 def _run_upload() -> int:
