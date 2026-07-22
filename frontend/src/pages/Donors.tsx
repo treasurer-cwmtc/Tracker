@@ -4,10 +4,12 @@ import DonorDetailModal from "./DonorDetailModal";
 import { TextColumnFilter } from "../components/ColumnFilter";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
 
-type SortKey = "name" | "email" | "city" | "state" | "joint_giver";
+type SortKey = "donor_id" | "name" | "email" | "city" | "state" | "joint_giver_id" | "joint_giver";
 
 function sortValue(d: Donor, key: SortKey): string | number {
   switch (key) {
+    case "donor_id":
+      return d.donor_id || "";
     case "name":
       return `${d.first_name} ${d.last_name}`.trim();
     case "email":
@@ -16,6 +18,8 @@ function sortValue(d: Donor, key: SortKey): string | number {
       return d.city;
     case "state":
       return d.state;
+    case "joint_giver_id":
+      return d.joint_giver_id || "";
     case "joint_giver":
       return `${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim();
   }
@@ -69,10 +73,12 @@ export default function Donors() {
     key: "name",
     dir: "asc",
   });
+  const [donorIdFilter, setDonorIdFilter] = useState<Set<string> | null>(null);
   const [nameFilter, setNameFilter] = useState<Set<string> | null>(null);
   const [emailFilter, setEmailFilter] = useState<Set<string> | null>(null);
   const [cityFilter, setCityFilter] = useState<Set<string> | null>(null);
   const [stateFilter, setStateFilter] = useState<Set<string> | null>(null);
+  const [jointGiverIdFilter, setJointGiverIdFilter] = useState<Set<string> | null>(null);
   const [jointGiverFilter, setJointGiverFilter] = useState<Set<string> | null>(null);
   const { widths, startResize } = useColumnWidths("donors-list");
 
@@ -86,6 +92,10 @@ export default function Donors() {
     );
   }
 
+  const donorIdOptions = useMemo(
+    () => Array.from(new Set((donors ?? []).map((d) => d.donor_id || "—"))).sort(),
+    [donors]
+  );
   const nameOptions = useMemo(
     () => Array.from(new Set((donors ?? []).map((d) => `${d.first_name} ${d.last_name}`.trim()))).sort(),
     [donors]
@@ -93,6 +103,10 @@ export default function Donors() {
   const emailOptions = useMemo(() => Array.from(new Set((donors ?? []).map((d) => d.email))).sort(), [donors]);
   const cityOptions = useMemo(() => Array.from(new Set((donors ?? []).map((d) => d.city))).sort(), [donors]);
   const stateOptions = useMemo(() => Array.from(new Set((donors ?? []).map((d) => d.state))).sort(), [donors]);
+  const jointGiverIdOptions = useMemo(
+    () => Array.from(new Set((donors ?? []).map((d) => d.joint_giver_id || "—"))).sort(),
+    [donors]
+  );
   const jointGiverOptions = useMemo(
     () =>
       Array.from(
@@ -104,12 +118,16 @@ export default function Donors() {
   const visibleDonors = useMemo(() => {
     if (!donors) return [];
     let out = donors.filter((d) => {
+      const donorId = d.donor_id || "—";
       const name = `${d.first_name} ${d.last_name}`.trim();
+      const jointGiverId = d.joint_giver_id || "—";
       const jointGiver = `${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim();
+      if (donorIdFilter && !donorIdFilter.has(donorId)) return false;
       if (nameFilter && !nameFilter.has(name)) return false;
       if (emailFilter && !emailFilter.has(d.email)) return false;
       if (cityFilter && !cityFilter.has(d.city)) return false;
       if (stateFilter && !stateFilter.has(d.state)) return false;
+      if (jointGiverIdFilter && !jointGiverIdFilter.has(jointGiverId)) return false;
       if (jointGiverFilter && !jointGiverFilter.has(jointGiver)) return false;
       return true;
     });
@@ -124,7 +142,17 @@ export default function Donors() {
       });
     }
     return out;
-  }, [donors, sort, nameFilter, emailFilter, cityFilter, stateFilter, jointGiverFilter]);
+  }, [
+    donors,
+    sort,
+    donorIdFilter,
+    nameFilter,
+    emailFilter,
+    cityFilter,
+    stateFilter,
+    jointGiverIdFilter,
+    jointGiverFilter,
+  ]);
 
   if (error) return <div className="error">{error}</div>;
   if (!donors) return <p className="subtitle">Loading…</p>;
@@ -140,9 +168,27 @@ export default function Donors() {
 
       <div className="table-wrap">
         <table className="resizable-cols">
-          <ColGroup columns={["name", "email", "city", "state", "joint_giver"]} widths={widths} />
+          <ColGroup
+            columns={["donor_id", "name", "email", "city", "state", "joint_giver_id", "joint_giver"]}
+            widths={widths}
+          />
           <thead>
             <tr>
+              <SortableHeader
+                label="Donor ID"
+                sortKey="donor_id"
+                activeSort={sort}
+                onSort={onSort}
+                filter={
+                  <TextColumnFilter
+                    label="Donor ID"
+                    options={donorIdOptions}
+                    selected={donorIdFilter}
+                    onChange={setDonorIdFilter}
+                  />
+                }
+                resizeHandle={<ColResizeHandle col="donor_id" startResize={startResize} />}
+              />
               <SortableHeader
                 label="Name"
                 sortKey="name"
@@ -194,6 +240,21 @@ export default function Donors() {
                 resizeHandle={<ColResizeHandle col="state" startResize={startResize} />}
               />
               <SortableHeader
+                label="Joint Giver ID"
+                sortKey="joint_giver_id"
+                activeSort={sort}
+                onSort={onSort}
+                filter={
+                  <TextColumnFilter
+                    label="Joint Giver ID"
+                    options={jointGiverIdOptions}
+                    selected={jointGiverIdFilter}
+                    onChange={setJointGiverIdFilter}
+                  />
+                }
+                resizeHandle={<ColResizeHandle col="joint_giver_id" startResize={startResize} />}
+              />
+              <SortableHeader
                 label="Joint Giver"
                 sortKey="joint_giver"
                 activeSort={sort}
@@ -213,22 +274,20 @@ export default function Donors() {
           <tbody>
             {visibleDonors.map((d) => (
               <tr key={d.donor_id} onClick={() => setOpenDonor(d)} style={{ cursor: "pointer" }}>
+                <td>{d.donor_id || "—"}</td>
                 <td>
-                  {d.donor_id} · {d.first_name} {d.last_name}
+                  {d.first_name} {d.last_name}
                 </td>
                 <td>{d.email}</td>
                 <td>{d.city}</td>
                 <td>{d.state}</td>
-                <td>
-                  {d.joint_giver_id
-                    ? `${d.joint_giver_id} · ${`${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim() || d.joint_giver_id}`
-                    : ""}
-                </td>
+                <td>{d.joint_giver_id || ""}</td>
+                <td>{`${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim()}</td>
               </tr>
             ))}
             {visibleDonors.length === 0 && (
               <tr>
-                <td colSpan={5} className="subtitle">
+                <td colSpan={7} className="subtitle">
                   {donors.length === 0 ? "No donors on file." : "No donors match the current filters."}
                 </td>
               </tr>

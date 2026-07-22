@@ -47,21 +47,21 @@ export default function PledgeCampaigns({ user }: { user: User }) {
 
   return (
     <div>
-      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <label className="field" style={{ maxWidth: 220, marginBottom: 0 }}>
-          <span>Campaign</span>
-          <select
-            value={campaignId ?? ""}
-            onChange={(ev) => setCampaignId(Number(ev.target.value))}
-          >
-            {campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      <label className="field" style={{ maxWidth: 220, marginBottom: 12 }}>
+        <span>Campaign</span>
+        <select
+          value={campaignId ?? ""}
+          onChange={(ev) => setCampaignId(Number(ev.target.value))}
+        >
+          {campaigns.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </label>
 
+      <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <h2 className="page-title" style={{ margin: 0, whiteSpace: "nowrap" }}>
           {campaign ? campaign.name : "Campaign"} Status
         </h2>
