@@ -136,7 +136,7 @@ export default function Step4Validate(props: {
           </p>
         ) : (
           <button className="btn" onClick={confirmImport} disabled={!props.bankAccountId || importing}>
-            {importing ? "Pushing to Actual…" : "Confirm & push to Actual"}
+            {importing ? "Processing…" : "Process"}
           </button>
         )}
         {error && <div className="error">{error}</div>}
