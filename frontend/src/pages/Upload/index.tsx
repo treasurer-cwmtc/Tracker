@@ -87,6 +87,7 @@ export default function Upload() {
               onBankAccountChange={setBankAccountId}
               run={run}
               onRunChange={setRun}
+              onRuleAdded={(r) => setRulesAdded((prev) => [...prev, r])}
               onNext={() => goTo(2)}
             />
           )}

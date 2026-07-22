@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
-import { rulesApi } from "../../api/rules";
+import { Rule, rulesApi } from "../../api/rules";
 import AccountPicker from "../ledger/AccountPicker";
 import WizardLineModal from "./WizardLineModal";
 import WizardLineRow from "./WizardLineRow";
@@ -14,6 +14,7 @@ export default function Step1BankUpload(props: {
   onBankAccountChange: (id: number | "") => void;
   run: ReconRun | null;
   onRunChange: (run: ReconRun) => void;
+  onRuleAdded: (rule: Rule) => void;
   onNext: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
@@ -163,7 +164,10 @@ export default function Step1BankUpload(props: {
                   key={desc}
                   description={desc}
                   accounts={props.accounts.filter((a) => a.category === "Expense")}
-                  onAdded={refreshRun}
+                  onAdded={(rule) => {
+                    props.onRuleAdded(rule);
+                    refreshRun();
+                  }}
                 />
               ))}
             </div>
@@ -201,7 +205,7 @@ export default function Step1BankUpload(props: {
 function AddKeywordRuleRow(props: {
   description: string;
   accounts: ChartAccount[];
-  onAdded: () => void;
+  onAdded: (rule: Rule) => void;
 }) {
   // Pre-filled with the full raw line, but editable - trim it down to just
   // the meaningful part (e.g. the payee name) so the rule matches every
@@ -216,7 +220,7 @@ function AddKeywordRuleRow(props: {
     setBusy(true);
     setError("");
     try {
-      await rulesApi.createRule({
+      const rule = await rulesApi.createRule({
         rule_type: "bank_keyword",
         pattern: pattern.trim(),
         account_no: accountNo,
@@ -225,7 +229,7 @@ function AddKeywordRuleRow(props: {
       // Re-checks every still-uncategorized line against the current rule
       // set (including this new one), so any other line containing the
       // same keyword gets picked up automatically, not just this one.
-      props.onAdded();
+      props.onAdded(rule);
     } catch (e) {
       setError((e as Error).message);
     } finally {
