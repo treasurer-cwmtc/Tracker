@@ -3,11 +3,7 @@ import { donorsApi, Donor } from "../api/donors";
 import DonorDetailModal from "./DonorDetailModal";
 import { TextColumnFilter } from "../components/ColumnFilter";
 
-function fmtMoney(n: number): string {
-  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
-}
-
-type SortKey = "name" | "email" | "city" | "state" | "joint_giver" | "donation_count" | "total_given";
+type SortKey = "name" | "email" | "city" | "state" | "joint_giver";
 
 function sortValue(d: Donor, key: SortKey): string | number {
   switch (key) {
@@ -21,10 +17,6 @@ function sortValue(d: Donor, key: SortKey): string | number {
       return d.state;
     case "joint_giver":
       return `${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim();
-    case "donation_count":
-      return d.donation_count;
-    case "total_given":
-      return d.total_given;
   }
 }
 
@@ -205,31 +197,27 @@ export default function Donors() {
                   />
                 }
               />
-              <SortableHeader label="# Gifts" sortKey="donation_count" activeSort={sort} onSort={onSort} />
-              <SortableHeader label="Lifetime Total" sortKey="total_given" activeSort={sort} onSort={onSort} />
             </tr>
           </thead>
           <tbody>
             {visibleDonors.map((d) => (
               <tr key={d.donor_id} onClick={() => setOpenDonor(d)} style={{ cursor: "pointer" }}>
                 <td>
-                  {d.first_name} {d.last_name}
+                  {d.donor_id} · {d.first_name} {d.last_name}
                 </td>
                 <td>{d.email}</td>
                 <td>{d.city}</td>
                 <td>{d.state}</td>
                 <td>
                   {d.joint_giver_id
-                    ? `${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim() || d.joint_giver_id
+                    ? `${d.joint_giver_id} · ${`${d.joint_giver_first_name} ${d.joint_giver_last_name}`.trim() || d.joint_giver_id}`
                     : ""}
                 </td>
-                <td>{d.donation_count}</td>
-                <td>{fmtMoney(d.total_given)}</td>
               </tr>
             ))}
             {visibleDonors.length === 0 && (
               <tr>
-                <td colSpan={7} className="subtitle">
+                <td colSpan={5} className="subtitle">
                   {donors.length === 0 ? "No donors on file." : "No donors match the current filters."}
                 </td>
               </tr>
