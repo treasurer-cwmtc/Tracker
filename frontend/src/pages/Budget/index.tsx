@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { accountsApi, ChartAccount } from "../../api/accounts";
 import { budgetApi, BudgetEntry, BudgetEntryUpdate } from "../../api/budget";
 import { settingsApi } from "../../api/settings";
@@ -27,6 +27,11 @@ export default function Budget() {
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [copyFromYear, setCopyFromYear] = useState<number | "">("");
   const [copyStatus, setCopyStatus] = useState("");
+  // Every year that already has at least one budget line, e.g. once
+  // 2024/2025 are imported - drives the "Copy budget from year" dropdown
+  // (only years with something to copy make sense there) and folds into
+  // the Year dropdown's own option list.
+  const [yearsWithData, setYearsWithData] = useState<number[]>([]);
 
   useEffect(() => {
     accountsApi.listAccounts("Budget").then(setAccounts).catch((err) => setError((err as Error).message));
@@ -34,7 +39,32 @@ export default function Budget() {
       .get("prior_year_end_date")
       .then((s) => setYear(currentYearFromCutoff(s.value)))
       .catch((err) => setError((err as Error).message));
+    budgetApi
+      .list()
+      .then((all) =>
+        setYearsWithData(
+          Array.from(
+            new Set(all.flatMap((e) => (e.transaction_date ? [Number(e.transaction_date.slice(0, 4))] : [])))
+          ).sort((a, b) => b - a)
+        )
+      )
+      .catch((err) => setError((err as Error).message));
   }, []);
+
+  // The Year selector always offers a sensible range around the app's
+  // Current Year even before any data exists for it, plus any data year
+  // outside that range (e.g. old history) - never limited to just years
+  // that already happen to have entries.
+  const yearOptions = useMemo(() => {
+    if (year == null) return yearsWithData;
+    const range = [year - 3, year - 2, year - 1, year, year + 1];
+    return Array.from(new Set([...range, ...yearsWithData])).sort((a, b) => b - a);
+  }, [year, yearsWithData]);
+
+  const copyFromYearOptions = useMemo(
+    () => yearsWithData.filter((y) => y !== year),
+    [yearsWithData, year]
+  );
 
   async function load(y: number) {
     setLoading(true);
@@ -73,6 +103,20 @@ export default function Budget() {
     }
   }
 
+  async function refreshYearsWithData() {
+    try {
+      const all = await budgetApi.list();
+      setYearsWithData(
+        Array.from(
+          new Set(all.flatMap((e) => (e.transaction_date ? [Number(e.transaction_date.slice(0, 4))] : [])))
+        ).sort((a, b) => b - a)
+      );
+    } catch {
+      // Non-critical - the dropdown just won't pick up the new year until
+      // the next successful refresh.
+    }
+  }
+
   async function onCopyYear() {
     if (year == null || copyFromYear === "" || copyFromYear === year) return;
     setCopyStatus("");
@@ -80,6 +124,7 @@ export default function Budget() {
       const result = await budgetApi.copyYear(copyFromYear, year);
       setCopyStatus(`Copied ${result.copied} lines from ${copyFromYear}.`);
       await load(year);
+      await refreshYearsWithData();
     } catch (err) {
       const msg = (err as Error).message;
       if (msg.toLowerCase().includes("already has") && confirm(`${msg} Replace them?`)) {
@@ -87,6 +132,7 @@ export default function Budget() {
           const result = await budgetApi.copyYear(copyFromYear, year, true);
           setCopyStatus(`Copied ${result.copied} lines from ${copyFromYear} (replaced existing).`);
           await load(year);
+          await refreshYearsWithData();
         } catch (err2) {
           setError((err2 as Error).message);
         }
@@ -114,25 +160,37 @@ export default function Budget() {
         </button>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <span>Year:</span>
-          <input
-            type="number"
-            style={{ width: 90 }}
+          <select
             value={year ?? ""}
-            onChange={(e) => setYear(Number(e.target.value) || null)}
-          />
+            onChange={(e) => setYear(e.target.value ? Number(e.target.value) : null)}
+          >
+            {year != null && !yearOptions.includes(year) && <option value={year}>{year}</option>}
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
         </label>
         <span className="pill">Total: ${total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
       </div>
       <div className="toolbar">
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           <span>Copy budget from year:</span>
-          <input
-            type="number"
-            style={{ width: 90 }}
+          <select
             value={copyFromYear}
             onChange={(e) => setCopyFromYear(e.target.value ? Number(e.target.value) : "")}
-            placeholder="e.g. 2025"
-          />
+            disabled={copyFromYearOptions.length === 0}
+          >
+            <option value="">
+              {copyFromYearOptions.length === 0 ? "No other years yet" : "Select…"}
+            </option>
+            {copyFromYearOptions.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
         </label>
         <button className="btn secondary" onClick={onCopyYear} disabled={copyFromYear === "" || year == null}>
           Copy as starting point for {year ?? "…"}
@@ -190,7 +248,10 @@ export default function Budget() {
         <QuickAddModal
           accounts={accounts}
           year={year}
-          onCreated={(entry) => setEntries((prev) => [entry, ...prev])}
+          onCreated={(entry) => {
+            setEntries((prev) => [entry, ...prev]);
+            refreshYearsWithData();
+          }}
           onClose={() => setShowQuickAdd(false)}
         />
       )}
