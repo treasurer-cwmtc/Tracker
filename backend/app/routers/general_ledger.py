@@ -10,10 +10,12 @@ from ..models import (
     AccrualEntry,
     BankAccount,
     BudgetEntry,
+    CategoryRule,
     ChartOfAccount,
     ReconciliationEntry,
 )
 from ..schemas import GeneralLedgerLineOut
+from ..services.categorizer import Categorizer
 
 router = APIRouter(
     prefix="/api/general-ledger",
@@ -27,15 +29,25 @@ def _entry_to_line(
     source: str,
     coa_by_no: dict[str, ChartOfAccount],
     bank_accounts_by_id: dict[int, BankAccount],
+    categorizer: Categorizer,
 ) -> GeneralLedgerLineOut:
     coa = coa_by_no.get(entry.account_no)
     bank_account = bank_accounts_by_id.get(entry.bank_account_id) if entry.bank_account_id else None
+    # General Ledger is a pure union of Actual/Accrual/Budget - it must show
+    # exactly what each entry's own tab shows, not a re-derived view. The
+    # Actual tab resolves a blank Description via a live join to the
+    # matching bank-keyword rule (see reconciliation.py's _to_out); mirror
+    # that here for reconciliation-sourced rows only, since Accrual's own
+    # tab never applies this fallback (hand-entered, no rule-driven import).
+    description = entry.description
+    if source == "reconciliation" and not description:
+        description = categorizer.categorize_bank(entry.bank_description).description
     return GeneralLedgerLineOut(
         source=source,
         id=entry.id,
         transaction_date=entry.transaction_date,
         date_posted=entry.date_posted,
-        description=entry.description,
+        description=description,
         account_no=entry.account_no or "",
         statement_description=coa.statement_description if coa else "",
         category=coa.category if coa else "",
@@ -89,8 +101,10 @@ def list_general_ledger(
     every financial report should read from, rather than each report
     re-deriving its own view of "all the transactions". Read-only: edit the
     underlying entry on its own tab (Reconciliation/Accrual/Budget)."""
-    coa_by_no = {a.account_no: a for a in db.scalars(select(ChartOfAccount))}
+    accounts = list(db.scalars(select(ChartOfAccount)))
+    coa_by_no = {a.account_no: a for a in accounts}
     bank_accounts_by_id = {b.id: b for b in db.scalars(select(BankAccount))}
+    categorizer = Categorizer(list(db.scalars(select(CategoryRule))), accounts)
 
     lines: list[GeneralLedgerLineOut] = []
     for e in db.scalars(
@@ -98,12 +112,12 @@ def list_general_ledger(
     ):
         if year is not None and (e.date_posted is None or e.date_posted.year != year):
             continue
-        lines.append(_entry_to_line(e, "reconciliation", coa_by_no, bank_accounts_by_id))
+        lines.append(_entry_to_line(e, "reconciliation", coa_by_no, bank_accounts_by_id, categorizer))
 
     for e in db.scalars(select(AccrualEntry).where(AccrualEntry.is_split == False)):  # noqa: E712
         if year is not None and (e.date_posted is None or e.date_posted.year != year):
             continue
-        lines.append(_entry_to_line(e, "accrual", coa_by_no, bank_accounts_by_id))
+        lines.append(_entry_to_line(e, "accrual", coa_by_no, bank_accounts_by_id, categorizer))
 
     for e in db.scalars(select(BudgetEntry).where(BudgetEntry.amount != 0)):
         if year is not None and (e.transaction_date is None or e.transaction_date.year != year):
