@@ -14,28 +14,15 @@ import {
 import TransactionModal from "../ledger/TransactionModal";
 import BudgetDetailModal from "../Budget/DetailModal";
 
-const SOURCE_LABEL: Record<GeneralLedgerLine["source"], string> = {
-  reconciliation: "Actual",
-  accrual: "Accrual",
-  budget: "Budget",
-};
-
-const SOURCE_CLASS: Record<GeneralLedgerLine["source"], string> = {
-  reconciliation: "pill bank",
-  accrual: "pill stripe",
-  budget: "pill warn",
-};
-
 type SortKey =
-  | "source"
+  | "transaction_date"
   | "date_posted"
-  | "description"
   | "statement_description"
-  | "bank_description"
-  | "bank_account"
+  | "description"
   | "method"
-  | "file_name"
-  | "amount";
+  | "amount"
+  | "check_invoice_name"
+  | "bank_description";
 
 function SortableHeader({
   label,
@@ -88,13 +75,13 @@ export default function GeneralLedger() {
     key: "date_posted",
     dir: "desc",
   });
+  const [transactionDateFilter, setTransactionDateFilter] = useState<DateFilterValue | null>(null);
   const [datePostedFilter, setDatePostedFilter] = useState<DateFilterValue | null>(null);
   const [descriptionFilter, setDescriptionFilter] = useState<Set<string> | null>(null);
   const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
-  const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
   const [methodFilter, setMethodFilter] = useState<Set<string> | null>(null);
-  const [fileNameFilter, setFileNameFilter] = useState<Set<string> | null>(null);
+  const [checkInvoiceNameFilter, setCheckInvoiceNameFilter] = useState<Set<string> | null>(null);
 
   const [openReconId, setOpenReconId] = useState<number | null>(null);
   const [openAccrualId, setOpenAccrualId] = useState<number | null>(null);
@@ -136,24 +123,22 @@ export default function GeneralLedger() {
 
   function sortValue(l: GeneralLedgerLine, key: SortKey): string | number {
     switch (key) {
-      case "source":
-        return SOURCE_LABEL[l.source];
+      case "transaction_date":
+        return l.transaction_date || "";
       case "date_posted":
         return l.date_posted || "";
-      case "description":
-        return l.description;
       case "statement_description":
         return l.statement_description;
-      case "bank_description":
-        return l.bank_description;
-      case "bank_account":
-        return l.bank_account_name;
+      case "description":
+        return l.description;
       case "method":
         return l.method;
-      case "file_name":
-        return l.source_file_name;
       case "amount":
         return l.amount;
+      case "check_invoice_name":
+        return l.check_invoice_name;
+      case "bank_description":
+        return l.bank_description;
     }
   }
 
@@ -161,6 +146,10 @@ export default function GeneralLedger() {
     () => Array.from(new Set(lines.flatMap((l) => (l.date_posted ? [l.date_posted.slice(0, 4)] : [])))).sort(
       (a, b) => Number(b) - Number(a)
     ),
+    [lines]
+  );
+  const transactionDateMonthOptions = useMemo(
+    () => Array.from(new Set(lines.flatMap((l) => (l.transaction_date ? [l.transaction_date.slice(0, 7)] : [])))).sort(),
     [lines]
   );
   const datePostedMonthOptions = useMemo(
@@ -179,16 +168,12 @@ export default function GeneralLedger() {
     () => Array.from(new Set(lines.map((l) => l.bank_description || "—"))).sort(),
     [lines]
   );
-  const bankAccountOptions = useMemo(
-    () => Array.from(new Set(lines.map((l) => l.bank_account_name || "—"))).sort(),
-    [lines]
-  );
   const methodOptions = useMemo(
     () => Array.from(new Set(lines.map((l) => l.method || "—"))).sort(),
     [lines]
   );
-  const fileNameOptions = useMemo(
-    () => Array.from(new Set(lines.map((l) => l.source_file_name || "—"))).sort(),
+  const checkInvoiceNameOptions = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.check_invoice_name || "—"))).sort(),
     [lines]
   );
 
@@ -196,6 +181,7 @@ export default function GeneralLedger() {
     let out = lines.filter((l) => {
       if (year && l.date_posted?.slice(0, 4) !== year) return false;
       if (sourceFilter && l.source !== sourceFilter) return false;
+      if (!dateMatchesFilter(l.transaction_date, transactionDateFilter)) return false;
       if (!dateMatchesFilter(l.date_posted, datePostedFilter)) return false;
       if (descriptionFilter && !descriptionFilter.has(l.description || "—")) return false;
       if (
@@ -204,9 +190,8 @@ export default function GeneralLedger() {
       )
         return false;
       if (bankDescriptionFilter && !bankDescriptionFilter.has(l.bank_description || "—")) return false;
-      if (bankAccountFilter && !bankAccountFilter.has(l.bank_account_name || "—")) return false;
       if (methodFilter && !methodFilter.has(l.method || "—")) return false;
-      if (fileNameFilter && !fileNameFilter.has(l.source_file_name || "—")) return false;
+      if (checkInvoiceNameFilter && !checkInvoiceNameFilter.has(l.check_invoice_name || "—")) return false;
       return true;
     });
     if (sort.key) {
@@ -225,13 +210,13 @@ export default function GeneralLedger() {
     lines,
     year,
     sourceFilter,
+    transactionDateFilter,
     datePostedFilter,
     descriptionFilter,
     statementDescriptionFilter,
     bankDescriptionFilter,
-    bankAccountFilter,
     methodFilter,
-    fileNameFilter,
+    checkInvoiceNameFilter,
     sort,
   ]);
 
@@ -284,7 +269,7 @@ export default function GeneralLedger() {
       <p className="subtitle" style={{ marginTop: 0 }}>
         Every Actual, Accrual, and Budget line in one place - the
         base every financial report is built from. Click a row to open its detail popup and edit
-        it right here.
+        it right here. Scroll right for Bank Description.
       </p>
       <div className="toolbar">
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
@@ -318,7 +303,20 @@ export default function GeneralLedger() {
           <table>
             <thead>
               <tr>
-                <SortableHeader label="Source" sortKey="source" activeSort={sort} onSort={onSort} />
+                <SortableHeader
+                  label="Transaction Date"
+                  sortKey="transaction_date"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <DateColumnFilter
+                      label="Transaction Date"
+                      monthOptions={transactionDateMonthOptions}
+                      value={transactionDateFilter}
+                      onChange={setTransactionDateFilter}
+                    />
+                  }
+                />
                 <SortableHeader
                   label="Posted Date"
                   sortKey="date_posted"
@@ -330,20 +328,6 @@ export default function GeneralLedger() {
                       monthOptions={datePostedMonthOptions}
                       value={datePostedFilter}
                       onChange={setDatePostedFilter}
-                    />
-                  }
-                />
-                <SortableHeader
-                  label="Description"
-                  sortKey="description"
-                  activeSort={sort}
-                  onSort={onSort}
-                  filter={
-                    <TextColumnFilter
-                      label="Description"
-                      options={descriptionOptions}
-                      selected={descriptionFilter}
-                      onChange={setDescriptionFilter}
                     />
                   }
                 />
@@ -362,30 +346,16 @@ export default function GeneralLedger() {
                   }
                 />
                 <SortableHeader
-                  label="Bank Description"
-                  sortKey="bank_description"
+                  label="Description"
+                  sortKey="description"
                   activeSort={sort}
                   onSort={onSort}
                   filter={
                     <TextColumnFilter
-                      label="Bank Description"
-                      options={bankDescriptionOptions}
-                      selected={bankDescriptionFilter}
-                      onChange={setBankDescriptionFilter}
-                    />
-                  }
-                />
-                <SortableHeader
-                  label="Bank Account"
-                  sortKey="bank_account"
-                  activeSort={sort}
-                  onSort={onSort}
-                  filter={
-                    <TextColumnFilter
-                      label="Bank Account"
-                      options={bankAccountOptions}
-                      selected={bankAccountFilter}
-                      onChange={setBankAccountFilter}
+                      label="Description"
+                      options={descriptionOptions}
+                      selected={descriptionFilter}
+                      onChange={setDescriptionFilter}
                     />
                   }
                 />
@@ -403,21 +373,35 @@ export default function GeneralLedger() {
                     />
                   }
                 />
+                <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
                 <SortableHeader
-                  label="File Name"
-                  sortKey="file_name"
+                  label="Check/Invoice Name"
+                  sortKey="check_invoice_name"
                   activeSort={sort}
                   onSort={onSort}
                   filter={
                     <TextColumnFilter
-                      label="File Name"
-                      options={fileNameOptions}
-                      selected={fileNameFilter}
-                      onChange={setFileNameFilter}
+                      label="Check/Invoice Name"
+                      options={checkInvoiceNameOptions}
+                      selected={checkInvoiceNameFilter}
+                      onChange={setCheckInvoiceNameFilter}
                     />
                   }
                 />
-                <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
+                <SortableHeader
+                  label="Bank Description"
+                  sortKey="bank_description"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Bank Description"
+                      options={bankDescriptionOptions}
+                      selected={bankDescriptionFilter}
+                      onChange={setBankDescriptionFilter}
+                    />
+                  }
+                />
               </tr>
             </thead>
             <tbody>
@@ -428,46 +412,21 @@ export default function GeneralLedger() {
                     onClick={() => onRowClick(l)}
                     style={{ cursor: "pointer" }}
                   >
-                    <td>
-                      <span className={SOURCE_CLASS[l.source]}>{SOURCE_LABEL[l.source]}</span>
-                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>{l.transaction_date || "—"}</td>
                     <td style={{ whiteSpace: "nowrap" }}>{l.date_posted || "—"}</td>
-                    <td>{l.description || "—"}</td>
                     <td>{l.statement_description || "— uncategorized —"}</td>
-                    <td style={{ whiteSpace: "normal", wordBreak: "break-word", minWidth: 260 }}>
-                      {l.bank_description || "—"}
-                    </td>
-                    <td style={{ whiteSpace: "nowrap" }}>{l.bank_account_name || "—"}</td>
+                    <td>{l.description || "—"}</td>
                     <td>{l.method || "—"}</td>
-                    <td
-                      style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                      title={l.source_file_name}
-                    >
-                      {l.source_file_name ? (
-                        l.source_file_link ? (
-                          <a
-                            href={l.source_file_link}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(ev) => ev.stopPropagation()}
-                          >
-                            {l.source_file_name}
-                          </a>
-                        ) : (
-                          l.source_file_name
-                        )
-                      ) : (
-                        "—"
-                      )}
-                    </td>
                     <td className="num" style={{ whiteSpace: "nowrap" }}>
                       ${l.amount.toFixed(2)}
                     </td>
+                    <td>{l.check_invoice_name || "—"}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{l.bank_description || "—"}</td>
                   </tr>
                 ))}
               {!loading && visible.length === 0 && (
                 <tr>
-                  <td colSpan={9} style={{ color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ color: "var(--muted)" }}>
                     No lines match this filter.
                   </td>
                 </tr>
