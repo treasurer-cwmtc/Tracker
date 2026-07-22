@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { pledgeCampaignsApi, PledgeCampaign, PledgeDashboard, Pledge } from "../../api/pledgeCampaigns";
 import { donationsApi, FundSummary } from "../../api/donations";
 import { uploadCampaignImportFile, PickedFile } from "../../lib/googleDrive";
+import { getCurrentFiscalYear } from "../../api/settings";
 
 const STEPS = [
   { key: 1, label: "Campaign" },
@@ -183,9 +184,9 @@ export default function ImportWizard() {
     donationsApi.funds().then(setFunds).catch(() => setFunds([]));
   }, []);
 
-  // Every upload in this wizard is also archived to Google Drive (Campaign
-  // Imports folder / Campaign / <campaign name> / <file>) so a row can
-  // always be traced back to the exact file it came from. A Drive failure
+  // Every upload in this wizard is also archived to Google Drive
+  // (<current year>/Campaign/<campaign name>/<file>) so a row can always be
+  // traced back to the exact file it came from. A Drive failure
   // (not configured, popup blocked, network hiccup) never blocks the
   // actual data import - it just means that one import's rows won't have
   // a source file reference, surfaced as a dismissable warning instead.
@@ -195,7 +196,8 @@ export default function ImportWizard() {
     if (!campaign) return null;
     try {
       setDriveWarning("");
-      return await uploadCampaignImportFile(campaign.name, file);
+      const year = await getCurrentFiscalYear();
+      return await uploadCampaignImportFile(campaign.name, file, year);
     } catch (err) {
       setDriveWarning(
         `Couldn't save a copy to Google Drive (${(err as Error).message}) - the import will still proceed, ` +

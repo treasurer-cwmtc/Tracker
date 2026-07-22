@@ -21,6 +21,7 @@ type SortKey =
   | "statement_description"
   | "bank_description"
   | "bank_account"
+  | "file_name"
   | "amount";
 
 function SortableHeader({
@@ -71,6 +72,7 @@ export default function Reconciliation() {
   const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
+  const [fileNameFilter, setFileNameFilter] = useState<Set<string> | null>(null);
 
   async function load() {
     try {
@@ -111,6 +113,8 @@ export default function Reconciliation() {
         return e.bank_description;
       case "bank_account":
         return bankAccountName(e);
+      case "file_name":
+        return e.source_file_name;
       case "amount":
         return e.amount;
     }
@@ -156,6 +160,10 @@ export default function Reconciliation() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entries, bankAccounts]
   );
+  const fileNameOptions = useMemo(
+    () => Array.from(new Set(entries.map((e) => e.source_file_name || "—"))).sort(),
+    [entries]
+  );
 
   const activeColumn = filterColumn ? COLUMNS.find((c) => c.key === filterColumn) : null;
 
@@ -172,6 +180,7 @@ export default function Reconciliation() {
         return false;
       if (bankDescriptionFilter && !bankDescriptionFilter.has(e.bank_description || "—")) return false;
       if (bankAccountFilter && !bankAccountFilter.has(bankAccountName(e) || "—")) return false;
+      if (fileNameFilter && !fileNameFilter.has(e.source_file_name || "—")) return false;
       return true;
     });
     if (sort.key) {
@@ -196,6 +205,7 @@ export default function Reconciliation() {
     statementDescriptionFilter,
     bankDescriptionFilter,
     bankAccountFilter,
+    fileNameFilter,
     sort,
   ]);
 
@@ -233,8 +243,9 @@ export default function Reconciliation() {
         Click a chip below to filter down to just the rows missing that column.
         Every column header sorts and filters — Bank Description shows the raw
         bank line in full, wrapping onto extra lines rather than truncating
-        it. The Txn/Posted CY/PY columns are driven by the fiscal year date
-        set on the Config tab (shared with Accrual).
+        it, and File Name links back to the exact upload it came from in
+        Google Drive. The Txn/Posted CY/PY columns are driven by the fiscal
+        year date set on the Config tab (shared with Accrual).
       </p>
       {error && <div className="error">{error}</div>}
 
@@ -345,6 +356,20 @@ export default function Reconciliation() {
                     />
                   }
                 />
+                <SortableHeader
+                  label="File Name"
+                  sortKey="file_name"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="File Name"
+                      options={fileNameOptions}
+                      selected={fileNameFilter}
+                      onChange={setFileNameFilter}
+                    />
+                  }
+                />
                 <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
               </tr>
             </thead>
@@ -360,11 +385,12 @@ export default function Reconciliation() {
                   wideBankDescription
                   showPostedDate
                   hideMethod
+                  showFileName
                 />
               ))}
               {visibleEntries.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ color: "var(--muted)" }}>
+                  <td colSpan={9} style={{ color: "var(--muted)" }}>
                     {entries.length === 0
                       ? "No entries yet — push a completed run from the Upload tab."
                       : "No rows match this filter."}

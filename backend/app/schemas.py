@@ -149,6 +149,8 @@ class ReconRunOut(BaseModel):
     created_at: datetime
     bank_filename: str
     stripe_filename: str
+    bank_file_link: str
+    stripe_file_link: str
     bank_line_count: int
     stripe_line_count: int
     matched_payout_count: int
@@ -270,6 +272,8 @@ class ReconciliationEntryOut(BaseModel):
     receipt_file_id: str
     receipt_file_name: str
     receipt_web_view_link: str
+    source_file_name: str
+    source_file_link: str
     # Derived live from the linked Chart of Accounts row (blank if account_no
     # doesn't match any account, e.g. not yet categorized).
     statement_description: str
@@ -458,6 +462,8 @@ class GeneralLedgerLineOut(BaseModel):
     amount: float
     check_invoice_name: str
     notes: str
+    source_file_name: str
+    source_file_link: str
 
 
 class IncomeStatementRowOut(BaseModel):

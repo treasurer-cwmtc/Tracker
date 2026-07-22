@@ -34,6 +34,7 @@ type SortKey =
   | "bank_description"
   | "bank_account"
   | "method"
+  | "file_name"
   | "amount";
 
 function SortableHeader({
@@ -93,6 +94,7 @@ export default function GeneralLedger() {
   const [bankDescriptionFilter, setBankDescriptionFilter] = useState<Set<string> | null>(null);
   const [bankAccountFilter, setBankAccountFilter] = useState<Set<string> | null>(null);
   const [methodFilter, setMethodFilter] = useState<Set<string> | null>(null);
+  const [fileNameFilter, setFileNameFilter] = useState<Set<string> | null>(null);
 
   const [openReconId, setOpenReconId] = useState<number | null>(null);
   const [openAccrualId, setOpenAccrualId] = useState<number | null>(null);
@@ -148,6 +150,8 @@ export default function GeneralLedger() {
         return l.bank_account_name;
       case "method":
         return l.method;
+      case "file_name":
+        return l.source_file_name;
       case "amount":
         return l.amount;
     }
@@ -183,6 +187,10 @@ export default function GeneralLedger() {
     () => Array.from(new Set(lines.map((l) => l.method || "—"))).sort(),
     [lines]
   );
+  const fileNameOptions = useMemo(
+    () => Array.from(new Set(lines.map((l) => l.source_file_name || "—"))).sort(),
+    [lines]
+  );
 
   const visible = useMemo(() => {
     let out = lines.filter((l) => {
@@ -198,6 +206,7 @@ export default function GeneralLedger() {
       if (bankDescriptionFilter && !bankDescriptionFilter.has(l.bank_description || "—")) return false;
       if (bankAccountFilter && !bankAccountFilter.has(l.bank_account_name || "—")) return false;
       if (methodFilter && !methodFilter.has(l.method || "—")) return false;
+      if (fileNameFilter && !fileNameFilter.has(l.source_file_name || "—")) return false;
       return true;
     });
     if (sort.key) {
@@ -222,6 +231,7 @@ export default function GeneralLedger() {
     bankDescriptionFilter,
     bankAccountFilter,
     methodFilter,
+    fileNameFilter,
     sort,
   ]);
 
@@ -393,6 +403,20 @@ export default function GeneralLedger() {
                     />
                   }
                 />
+                <SortableHeader
+                  label="File Name"
+                  sortKey="file_name"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="File Name"
+                      options={fileNameOptions}
+                      selected={fileNameFilter}
+                      onChange={setFileNameFilter}
+                    />
+                  }
+                />
                 <SortableHeader label="Amount" sortKey="amount" activeSort={sort} onSort={onSort} />
               </tr>
             </thead>
@@ -415,6 +439,27 @@ export default function GeneralLedger() {
                     </td>
                     <td style={{ whiteSpace: "nowrap" }}>{l.bank_account_name || "—"}</td>
                     <td>{l.method || "—"}</td>
+                    <td
+                      style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={l.source_file_name}
+                    >
+                      {l.source_file_name ? (
+                        l.source_file_link ? (
+                          <a
+                            href={l.source_file_link}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(ev) => ev.stopPropagation()}
+                          >
+                            {l.source_file_name}
+                          </a>
+                        ) : (
+                          l.source_file_name
+                        )
+                      ) : (
+                        "—"
+                      )}
+                    </td>
                     <td className="num" style={{ whiteSpace: "nowrap" }}>
                       ${l.amount.toFixed(2)}
                     </td>
@@ -422,7 +467,7 @@ export default function GeneralLedger() {
                 ))}
               {!loading && visible.length === 0 && (
                 <tr>
-                  <td colSpan={8} style={{ color: "var(--muted)" }}>
+                  <td colSpan={9} style={{ color: "var(--muted)" }}>
                     No lines match this filter.
                   </td>
                 </tr>

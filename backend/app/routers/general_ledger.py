@@ -48,6 +48,11 @@ def _entry_to_line(
         amount=entry.amount,
         check_invoice_name=entry.check_invoice_name,
         notes=entry.notes,
+        # Accrual entries never have these (hand-entered, no Upload run to
+        # trace back to) - getattr rather than adding always-blank columns
+        # to AccrualEntry just for schema parity.
+        source_file_name=getattr(entry, "source_file_name", ""),
+        source_file_link=getattr(entry, "source_file_link", ""),
     )
 
 
@@ -71,6 +76,8 @@ def _budget_to_line(entry: BudgetEntry, coa_by_no: dict[str, ChartOfAccount]) ->
         amount=entry.amount,
         check_invoice_name="",
         notes=entry.notes,
+        source_file_name="",
+        source_file_link="",
     )
 
 

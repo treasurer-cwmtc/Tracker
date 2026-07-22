@@ -1,5 +1,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
+import { getCurrentFiscalYear } from "../../api/settings";
+import { uploadBankOrStripeFile } from "../../lib/googleDrive";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -22,8 +24,18 @@ export default function Step3Reconcile(props: {
     if (!props.stripeFile) return;
     setBusy(true);
     setError("");
+    // Same best-effort Drive archiving as the bank file in Step 1 - a
+    // failure here never blocks the actual merge.
+    let stripeFileLink: string | undefined;
     try {
-      props.onRunChange(await reconcileApi.mergeStripe(run.id, props.stripeFile));
+      const year = await getCurrentFiscalYear();
+      const archived = await uploadBankOrStripeFile(props.stripeFile, year);
+      stripeFileLink = archived.url;
+    } catch {
+      stripeFileLink = undefined;
+    }
+    try {
+      props.onRunChange(await reconcileApi.mergeStripe(run.id, props.stripeFile, stripeFileLink));
       setDone(true);
     } catch (e) {
       setError((e as Error).message);

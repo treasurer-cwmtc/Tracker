@@ -205,6 +205,11 @@ class ReconRun(Base):
     )
     bank_filename: Mapped[str] = mapped_column(String(260), default="")
     stripe_filename: Mapped[str] = mapped_column(String(260), default="")
+    # Google Drive webViewLink for the archived copy of each raw upload -
+    # blank if the archive-to-Drive step failed or was skipped, which never
+    # blocks the import itself (see uploadBankOrStripeFile/googleDrive.ts).
+    bank_file_link: Mapped[str] = mapped_column(String(1000), default="")
+    stripe_file_link: Mapped[str] = mapped_column(String(1000), default="")
     bank_line_count: Mapped[int] = mapped_column(Integer, default=0)
     stripe_line_count: Mapped[int] = mapped_column(Integer, default=0)
     matched_payout_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -310,6 +315,12 @@ class ReconciliationEntry(Base):
     source_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("recon_runs.id"), nullable=True
     )
+    # The raw bank/Stripe upload file this line came from - carried down from
+    # the ReconRun's own bank_filename/bank_file_link (or stripe_ equivalent,
+    # per this line's own `source`) at import time, so any row can be traced
+    # back to the exact Google Drive file it originated from for an audit.
+    source_file_name: Mapped[str] = mapped_column(String(300), default="")
+    source_file_link: Mapped[str] = mapped_column(String(1000), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

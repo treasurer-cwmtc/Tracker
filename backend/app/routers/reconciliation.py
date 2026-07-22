@@ -59,6 +59,8 @@ def _to_out(
         receipt_file_id=entry.receipt_file_id,
         receipt_file_name=entry.receipt_file_name,
         receipt_web_view_link=entry.receipt_web_view_link,
+        source_file_name=entry.source_file_name,
+        source_file_link=entry.source_file_link,
         statement_description=coa.statement_description if coa else "",
         category=coa.category if coa else "",
         statement_category=coa.statement_category if coa else "",
@@ -159,6 +161,8 @@ def split_entry(
             notes=line.notes,
             dedup_key=f"{parent.dedup_key}#split{i}",
             source_run_id=parent.source_run_id,
+            source_file_name=parent.source_file_name,
+            source_file_link=parent.source_file_link,
             split_parent_id=parent.id,
         )
         db.add(child)
@@ -253,6 +257,8 @@ def import_run(
                 notes="" if line.notes == UNCATEGORIZED_NOTE else line.notes,
                 dedup_key=key,
                 source_run_id=run.id,
+                source_file_name=run.stripe_filename if line.source == "stripe" else run.bank_filename,
+                source_file_link=run.stripe_file_link if line.source == "stripe" else run.bank_file_link,
             )
         )
         imported += 1

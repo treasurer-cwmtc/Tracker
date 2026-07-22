@@ -21,6 +21,8 @@ export interface GeneralLedgerLine {
   amount: number;
   check_invoice_name: string;
   notes: string;
+  source_file_name: string;
+  source_file_link: string;
 }
 
 export const generalLedgerApi = {

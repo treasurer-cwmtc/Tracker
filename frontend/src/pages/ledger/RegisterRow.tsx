@@ -25,6 +25,9 @@ function RegisterRow(props: {
   // is opt-in rather than always-on.
   showPostedDate?: boolean;
   hideMethod?: boolean;
+  // Reconciliation-only audit trail: the raw bank/Stripe file this entry
+  // came from, linked out to its archived copy in Google Drive.
+  showFileName?: boolean;
 }) {
   const e = props.entry;
   const bankAccountName =
@@ -69,6 +72,29 @@ function RegisterRow(props: {
       )}
       <td style={{ whiteSpace: "nowrap" }}>{bankAccountName || "—"}</td>
       {!props.hideMethod && <td>{e.method || "—"}</td>}
+      {props.showFileName && (
+        <td
+          style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+          title={e.source_file_name}
+        >
+          {e.source_file_name ? (
+            e.source_file_link ? (
+              <a
+                href={e.source_file_link}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(ev) => ev.stopPropagation()}
+              >
+                {e.source_file_name}
+              </a>
+            ) : (
+              e.source_file_name
+            )
+          ) : (
+            <span style={{ color: "var(--muted)" }}>—</span>
+          )}
+        </td>
+      )}
       <td className="num" style={{ whiteSpace: "nowrap" }}>
         ${e.amount.toFixed(2)}
       </td>

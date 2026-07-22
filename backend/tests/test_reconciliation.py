@@ -22,6 +22,10 @@ def test_build_dedup_key_fits_column_even_for_long_bank_descriptions():
     assert len(key) <= 1500
 
 
+BANK_FILE_LINK = "https://drive.google.com/file/d/bank-test-id/view"
+STRIPE_FILE_LINK = "https://drive.google.com/file/d/stripe-test-id/view"
+
+
 def _run_upload() -> int:
     h = auth_header()
     with (
@@ -35,6 +39,7 @@ def _run_upload() -> int:
                 "bank_file": ("bank.csv", bank, "text/csv"),
                 "stripe_file": ("stripe.csv", stripe, "text/csv"),
             },
+            data={"bank_file_link": BANK_FILE_LINK, "stripe_file_link": STRIPE_FILE_LINK},
         )
     assert r.status_code == 200, r.text
     return r.json()["id"]
@@ -77,6 +82,19 @@ def test_import_run_dedups_on_reimport():
     assert imported_entries
     assert any(not e["account_no"] for e in imported_entries), "expected an uncategorized line in the fixture"
     assert all(e["notes"] != "Uncategorized - add a rule" for e in imported_entries)
+
+    # Every imported line traces back to the Drive-archived copy of whichever
+    # raw file it actually came from - the bank CSV for plain bank lines, the
+    # Stripe CSV for exploded donation lines - not just whichever file was
+    # uploaded last.
+    bank_sourced = [e for e in imported_entries if e["bank_description"] and "stripe" not in e["bank_description"].lower()]
+    stripe_sourced = [e for e in imported_entries if "orig co name:stripe" in e["bank_description"].lower()]
+    assert bank_sourced and stripe_sourced
+    assert all(e["source_file_name"] == "bank.csv" and e["source_file_link"] == BANK_FILE_LINK for e in bank_sourced)
+    assert all(
+        e["source_file_name"] == "stripe.csv" and e["source_file_link"] == STRIPE_FILE_LINK
+        for e in stripe_sourced
+    )
 
     # Description is a live join to the matching bank-keyword rule's own
     # Description, not a value stamped in at import time - setting one on

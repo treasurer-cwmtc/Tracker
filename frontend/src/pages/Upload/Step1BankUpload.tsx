@@ -3,6 +3,8 @@ import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
 import { Rule, rulesApi } from "../../api/rules";
+import { getCurrentFiscalYear } from "../../api/settings";
+import { uploadBankOrStripeFile } from "../../lib/googleDrive";
 import AccountPicker from "../ledger/AccountPicker";
 import WizardLineModal from "./WizardLineModal";
 import WizardLineRow from "./WizardLineRow";
@@ -28,8 +30,20 @@ export default function Step1BankUpload(props: {
     if (!file) return;
     setBusy(true);
     setError("");
+    // Archive the raw statement to Google Drive first - a failure here
+    // (Drive not configured, popup blocked, network hiccup) never blocks
+    // the actual import, it just means this run's lines won't have a
+    // source file link for the audit trail.
+    let bankFileLink: string | undefined;
     try {
-      props.onRunChange(await reconcileApi.bankOnly(file));
+      const year = await getCurrentFiscalYear();
+      const archived = await uploadBankOrStripeFile(file, year);
+      bankFileLink = archived.url;
+    } catch {
+      bankFileLink = undefined;
+    }
+    try {
+      props.onRunChange(await reconcileApi.bankOnly(file, bankFileLink));
     } catch (e) {
       setError((e as Error).message);
     } finally {
