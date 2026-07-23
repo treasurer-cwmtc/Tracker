@@ -63,15 +63,20 @@ export function ColGroup({
   columns,
   widths,
   defaultWidth = 150,
+  defaultWidths,
 }: {
   columns: string[];
   widths: Record<string, number>;
   defaultWidth?: number;
+  /** Per-column override of defaultWidth, for columns whose content is
+   * reliably narrower/wider than the table's general default (e.g. a
+   * yyyy-mm-dd date column next to free-text ones). */
+  defaultWidths?: Record<string, number>;
 }) {
   return (
     <colgroup>
       {columns.map((c) => (
-        <col key={c} style={{ width: widths[c] ?? defaultWidth }} />
+        <col key={c} style={{ width: widths[c] ?? defaultWidths?.[c] ?? defaultWidth }} />
       ))}
     </colgroup>
   );

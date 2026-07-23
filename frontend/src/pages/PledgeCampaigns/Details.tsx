@@ -220,7 +220,7 @@ export default function Details({
 
       <div className="table-wrap">
         <table className="resizable-cols">
-          <ColGroup columns={columns} widths={widths} />
+          <ColGroup columns={columns} widths={widths} defaultWidths={{ due_date: 110 }} />
           <thead>
             <tr>
               <SortableHeader
@@ -300,7 +300,7 @@ export default function Details({
                     onChange={setDueDateFilter}
                   />
                 }
-                resizeHandle={<ColResizeHandle col="due_date" startResize={startResize} />}
+                resizeHandle={<ColResizeHandle col="due_date" defaultWidth={110} startResize={startResize} />}
               />
               <SortableHeader
                 label="Pledged Amount"

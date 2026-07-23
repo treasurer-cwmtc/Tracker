@@ -8,7 +8,26 @@ import AccountDetailModal from "./AccountDetailModal";
 import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 import { TextColumnFilter } from "../../components/ColumnFilter";
 
-type SortKey = "account_no" | "category" | "statement_description" | "tax_deductible" | "mandatory";
+type SortKey =
+  | "account_no"
+  | "category"
+  | "statement_category"
+  | "statement_item"
+  | "statement_detail"
+  | "statement_description"
+  | "grouping"
+  | "tax_deductible"
+  | "mandatory"
+  | "youth_chaplain_share"
+  | "missions";
+
+function statementCategoryLabel(a: ChartAccount): string {
+  return `${a.statement_category_no} · ${a.statement_category}`;
+}
+
+function statementItemLabel(a: ChartAccount): string {
+  return `${a.statement_item_no} · ${a.statement_item}`;
+}
 
 function sortValue(a: ChartAccount, key: SortKey): string {
   switch (key) {
@@ -16,12 +35,24 @@ function sortValue(a: ChartAccount, key: SortKey): string {
       return a.account_no;
     case "category":
       return a.category;
+    case "statement_category":
+      return statementCategoryLabel(a);
+    case "statement_item":
+      return statementItemLabel(a);
+    case "statement_detail":
+      return a.statement_detail;
     case "statement_description":
       return a.statement_description;
+    case "grouping":
+      return a.grouping;
     case "tax_deductible":
       return a.is_tax_deductible;
     case "mandatory":
       return a.is_mandatory;
+    case "youth_chaplain_share":
+      return a.is_youth_chaplain_share;
+    case "missions":
+      return a.is_missions;
   }
 }
 
@@ -58,6 +89,20 @@ function SortableHeader({
   );
 }
 
+const COLUMNS = [
+  "account_no",
+  "category",
+  "statement_category",
+  "statement_item",
+  "statement_detail",
+  "statement_description",
+  "grouping",
+  "tax_deductible",
+  "mandatory",
+  "youth_chaplain_share",
+  "missions",
+];
+
 export default function Accounts() {
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [statementCategories, setStatementCategories] = useState<StatementCategory[]>([]);
@@ -71,9 +116,15 @@ export default function Accounts() {
   });
   const [accountNoFilter, setAccountNoFilter] = useState<Set<string> | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<Set<string> | null>(null);
+  const [statementCategoryFilter, setStatementCategoryFilter] = useState<Set<string> | null>(null);
+  const [statementItemFilter, setStatementItemFilter] = useState<Set<string> | null>(null);
+  const [statementDetailFilter, setStatementDetailFilter] = useState<Set<string> | null>(null);
   const [statementDescriptionFilter, setStatementDescriptionFilter] = useState<Set<string> | null>(null);
+  const [groupingFilter, setGroupingFilter] = useState<Set<string> | null>(null);
   const [taxDeductibleFilter, setTaxDeductibleFilter] = useState<Set<string> | null>(null);
   const [mandatoryFilter, setMandatoryFilter] = useState<Set<string> | null>(null);
+  const [youthChaplainShareFilter, setYouthChaplainShareFilter] = useState<Set<string> | null>(null);
+  const [missionsFilter, setMissionsFilter] = useState<Set<string> | null>(null);
 
   async function load() {
     try {
@@ -105,8 +156,24 @@ export default function Accounts() {
     () => Array.from(new Set(accounts.map((a) => a.category))).filter(Boolean).sort(),
     [accounts]
   );
+  const statementCategoryOptions = useMemo(
+    () => Array.from(new Set(accounts.map(statementCategoryLabel))).sort(),
+    [accounts]
+  );
+  const statementItemOptions = useMemo(
+    () => Array.from(new Set(accounts.map(statementItemLabel))).sort(),
+    [accounts]
+  );
+  const statementDetailOptions = useMemo(
+    () => Array.from(new Set(accounts.map((a) => a.statement_detail || "—"))).sort(),
+    [accounts]
+  );
   const statementDescriptionOptions = useMemo(
     () => Array.from(new Set(accounts.map((a) => a.statement_description))).sort(),
+    [accounts]
+  );
+  const groupingOptions = useMemo(
+    () => Array.from(new Set(accounts.map((a) => a.grouping || "—"))).sort(),
     [accounts]
   );
   const taxDeductibleOptions = useMemo(
@@ -117,14 +184,28 @@ export default function Accounts() {
     () => Array.from(new Set(accounts.map((a) => a.is_mandatory))).sort(),
     [accounts]
   );
+  const youthChaplainShareOptions = useMemo(
+    () => Array.from(new Set(accounts.map((a) => a.is_youth_chaplain_share))).sort(),
+    [accounts]
+  );
+  const missionsOptions = useMemo(
+    () => Array.from(new Set(accounts.map((a) => a.is_missions))).sort(),
+    [accounts]
+  );
 
   const filtered = useMemo(() => {
     let out = accounts.filter((a) => {
       if (accountNoFilter && !accountNoFilter.has(a.account_no)) return false;
       if (categoryFilter && !categoryFilter.has(a.category)) return false;
+      if (statementCategoryFilter && !statementCategoryFilter.has(statementCategoryLabel(a))) return false;
+      if (statementItemFilter && !statementItemFilter.has(statementItemLabel(a))) return false;
+      if (statementDetailFilter && !statementDetailFilter.has(a.statement_detail || "—")) return false;
       if (statementDescriptionFilter && !statementDescriptionFilter.has(a.statement_description)) return false;
+      if (groupingFilter && !groupingFilter.has(a.grouping || "—")) return false;
       if (taxDeductibleFilter && !taxDeductibleFilter.has(a.is_tax_deductible)) return false;
       if (mandatoryFilter && !mandatoryFilter.has(a.is_mandatory)) return false;
+      if (youthChaplainShareFilter && !youthChaplainShareFilter.has(a.is_youth_chaplain_share)) return false;
+      if (missionsFilter && !missionsFilter.has(a.is_missions)) return false;
       return true;
     });
     if (sort.key) {
@@ -140,9 +221,15 @@ export default function Accounts() {
     sort,
     accountNoFilter,
     categoryFilter,
+    statementCategoryFilter,
+    statementItemFilter,
+    statementDetailFilter,
     statementDescriptionFilter,
+    groupingFilter,
     taxDeductibleFilter,
     mandatoryFilter,
+    youthChaplainShareFilter,
+    missionsFilter,
   ]);
 
   return (
@@ -181,10 +268,7 @@ export default function Accounts() {
         {error && <div className="error">{error}</div>}
         <div className="table-wrap">
           <table className="resizable-cols">
-            <ColGroup
-              columns={["account_no", "category", "statement_description", "tax_deductible", "mandatory"]}
-              widths={widths}
-            />
+            <ColGroup columns={COLUMNS} widths={widths} />
             <thead>
               <tr>
                 <SortableHeader
@@ -203,19 +287,64 @@ export default function Accounts() {
                   resizeHandle={<ColResizeHandle col="account_no" startResize={startResize} />}
                 />
                 <SortableHeader
-                  label="Category"
+                  label="Type"
                   sortKey="category"
                   activeSort={sort}
                   onSort={onSort}
                   filter={
                     <TextColumnFilter
-                      label="Category"
+                      label="Type"
                       options={categoryOptions}
                       selected={categoryFilter}
                       onChange={setCategoryFilter}
                     />
                   }
                   resizeHandle={<ColResizeHandle col="category" startResize={startResize} />}
+                />
+                <SortableHeader
+                  label="Statement Category"
+                  sortKey="statement_category"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Statement Category"
+                      options={statementCategoryOptions}
+                      selected={statementCategoryFilter}
+                      onChange={setStatementCategoryFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="statement_category" startResize={startResize} />}
+                />
+                <SortableHeader
+                  label="Statement Item"
+                  sortKey="statement_item"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Statement Item"
+                      options={statementItemOptions}
+                      selected={statementItemFilter}
+                      onChange={setStatementItemFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="statement_item" startResize={startResize} />}
+                />
+                <SortableHeader
+                  label="Statement Detail"
+                  sortKey="statement_detail"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Statement Detail"
+                      options={statementDetailOptions}
+                      selected={statementDetailFilter}
+                      onChange={setStatementDetailFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="statement_detail" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Statement Description"
@@ -231,6 +360,21 @@ export default function Accounts() {
                     />
                   }
                   resizeHandle={<ColResizeHandle col="statement_description" startResize={startResize} />}
+                />
+                <SortableHeader
+                  label="Grouping"
+                  sortKey="grouping"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Grouping"
+                      options={groupingOptions}
+                      selected={groupingFilter}
+                      onChange={setGroupingFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="grouping" startResize={startResize} />}
                 />
                 <SortableHeader
                   label="Tax Deductible"
@@ -262,6 +406,36 @@ export default function Accounts() {
                   }
                   resizeHandle={<ColResizeHandle col="mandatory" startResize={startResize} />}
                 />
+                <SortableHeader
+                  label="Youth Chaplain Share"
+                  sortKey="youth_chaplain_share"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Youth Chaplain Share"
+                      options={youthChaplainShareOptions}
+                      selected={youthChaplainShareFilter}
+                      onChange={setYouthChaplainShareFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="youth_chaplain_share" startResize={startResize} />}
+                />
+                <SortableHeader
+                  label="Missions"
+                  sortKey="missions"
+                  activeSort={sort}
+                  onSort={onSort}
+                  filter={
+                    <TextColumnFilter
+                      label="Missions"
+                      options={missionsOptions}
+                      selected={missionsFilter}
+                      onChange={setMissionsFilter}
+                    />
+                  }
+                  resizeHandle={<ColResizeHandle col="missions" startResize={startResize} />}
+                />
               </tr>
             </thead>
             <tbody>
@@ -270,7 +444,7 @@ export default function Accounts() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ color: "var(--muted)" }}>
+                  <td colSpan={COLUMNS.length} style={{ color: "var(--muted)" }}>
                     No accounts yet.
                   </td>
                 </tr>
