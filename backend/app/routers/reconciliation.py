@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..deps import require_permission
-from ..models import BankAccount, ChartOfAccount, ReconciliationEntry, ReconRun
+from ..models import BankAccount, CategoryRule, ChartOfAccount, ReconciliationEntry, ReconRun
 from ..schemas import (
     ReconciliationEntryOut,
     ReconciliationEntryUpdate,
@@ -13,7 +13,9 @@ from ..schemas import (
     SplitGroupOut,
     SplitRequest,
 )
+from ..services.categorizer import Categorizer
 from ..services.ledger import build_dedup_key, friendly_method, parse_date
+from ..services.reconciler import UNCATEGORIZED_NOTE
 
 router = APIRouter(
     prefix="/api/reconciliation",
@@ -26,17 +28,25 @@ def _to_out(
     entry: ReconciliationEntry,
     coa_by_no: dict[str, ChartOfAccount],
     bank_accounts_by_id: dict[int, BankAccount],
+    categorizer: Categorizer,
 ) -> ReconciliationEntryOut:
     coa = coa_by_no.get(entry.account_no)
     bank_account = bank_accounts_by_id.get(entry.bank_account_id) if entry.bank_account_id else None
+    # Description is a live join to the current bank-keyword rules, same as
+    # Statement Description is a live join to the Chart of Accounts - a rule's
+    # Description is picked up immediately by every entry it matches,
+    # including ones imported before the rule had (or even was) one. Only
+    # kicks in when nothing's been typed directly on the entry, so a real
+    # manual description (a donor name, a note) is never overwritten.
+    description = entry.description or categorizer.categorize_bank(entry.bank_description).description
     return ReconciliationEntryOut(
         id=entry.id,
         transaction_date=entry.transaction_date,
-        date_posted=entry.date_posted,
+        posted_date=entry.posted_date,
         reconciled=entry.reconciled,
         is_reimbursement=entry.is_reimbursement,
         account_no=entry.account_no or "",
-        description=entry.description,
+        description=description,
         bank_account_id=entry.bank_account_id,
         bank_account_name=bank_account.name if bank_account else "",
         method=entry.method,
@@ -49,6 +59,8 @@ def _to_out(
         receipt_file_id=entry.receipt_file_id,
         receipt_file_name=entry.receipt_file_name,
         receipt_web_view_link=entry.receipt_web_view_link,
+        source_file_name=entry.source_file_name,
+        source_file_link=entry.source_file_link,
         statement_description=coa.statement_description if coa else "",
         category=coa.category if coa else "",
         statement_category=coa.statement_category if coa else "",
@@ -60,21 +72,32 @@ def _to_out(
     )
 
 
-def _lookups(db: Session) -> tuple[dict[str, ChartOfAccount], dict[int, BankAccount]]:
-    coa_by_no = {a.account_no: a for a in db.scalars(select(ChartOfAccount))}
+def _lookups(
+    db: Session,
+) -> tuple[dict[str, ChartOfAccount], dict[int, BankAccount], Categorizer]:
+    accounts = list(db.scalars(select(ChartOfAccount)))
+    coa_by_no = {a.account_no: a for a in accounts}
     bank_accounts_by_id = {b.id: b for b in db.scalars(select(BankAccount))}
-    return coa_by_no, bank_accounts_by_id
+    rules = list(db.scalars(select(CategoryRule)))
+    categorizer = Categorizer(rules, accounts)
+    return coa_by_no, bank_accounts_by_id, categorizer
 
 
 @router.get("", response_model=list[ReconciliationEntryOut])
-def list_entries(db: Session = Depends(get_db)) -> list[ReconciliationEntryOut]:
-    coa_by_no, bank_accounts_by_id = _lookups(db)
+def list_entries(
+    year: int | None = None, db: Session = Depends(get_db)
+) -> list[ReconciliationEntryOut]:
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
     entries = db.scalars(
         select(ReconciliationEntry)
         .where(ReconciliationEntry.is_split == False)  # noqa: E712 - hidden once split
         .order_by(ReconciliationEntry.transaction_date.desc())
     )
-    return [_to_out(e, coa_by_no, bank_accounts_by_id) for e in entries]
+    return [
+        _to_out(e, coa_by_no, bank_accounts_by_id, categorizer)
+        for e in entries
+        if year is None or (e.posted_date is not None and e.posted_date.year == year)
+    ]
 
 
 @router.put("/{entry_id}", response_model=ReconciliationEntryOut)
@@ -88,8 +111,8 @@ def update_entry(
         setattr(entry, field, value.strip() if isinstance(value, str) else value)
     db.commit()
     db.refresh(entry)
-    coa_by_no, bank_accounts_by_id = _lookups(db)
-    return _to_out(entry, coa_by_no, bank_accounts_by_id)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return _to_out(entry, coa_by_no, bank_accounts_by_id, categorizer)
 
 
 @router.delete("/{entry_id}", status_code=204)
@@ -133,7 +156,7 @@ def split_entry(
     for i, line in enumerate(payload.lines):
         child = ReconciliationEntry(
             transaction_date=parent.transaction_date,
-            date_posted=parent.date_posted,
+            posted_date=parent.posted_date,
             account_no=line.account_no,
             description=line.description,
             bank_account_id=parent.bank_account_id,
@@ -144,6 +167,8 @@ def split_entry(
             notes=line.notes,
             dedup_key=f"{parent.dedup_key}#split{i}",
             source_run_id=parent.source_run_id,
+            source_file_name=parent.source_file_name,
+            source_file_link=parent.source_file_link,
             split_parent_id=parent.id,
         )
         db.add(child)
@@ -152,8 +177,8 @@ def split_entry(
     db.commit()
     for c in children:
         db.refresh(c)
-    coa_by_no, bank_accounts_by_id = _lookups(db)
-    return [_to_out(c, coa_by_no, bank_accounts_by_id) for c in children]
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return [_to_out(c, coa_by_no, bank_accounts_by_id, categorizer) for c in children]
 
 
 @router.post("/{parent_id}/unsplit", response_model=ReconciliationEntryOut)
@@ -171,8 +196,8 @@ def unsplit_entry(parent_id: int, db: Session = Depends(get_db)) -> Reconciliati
     parent.is_split = False
     db.commit()
     db.refresh(parent)
-    coa_by_no, bank_accounts_by_id = _lookups(db)
-    return _to_out(parent, coa_by_no, bank_accounts_by_id)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
+    return _to_out(parent, coa_by_no, bank_accounts_by_id, categorizer)
 
 
 @router.get("/split-group/{parent_id}", response_model=SplitGroupOut)
@@ -185,10 +210,10 @@ def get_split_group(parent_id: int, db: Session = Depends(get_db)) -> SplitGroup
             select(ReconciliationEntry).where(ReconciliationEntry.split_parent_id == parent_id)
         )
     )
-    coa_by_no, bank_accounts_by_id = _lookups(db)
+    coa_by_no, bank_accounts_by_id, categorizer = _lookups(db)
     return SplitGroupOut(
-        parent=_to_out(parent, coa_by_no, bank_accounts_by_id),
-        children=[_to_out(c, coa_by_no, bank_accounts_by_id) for c in children],
+        parent=_to_out(parent, coa_by_no, bank_accounts_by_id, categorizer),
+        children=[_to_out(c, coa_by_no, bank_accounts_by_id, categorizer) for c in children],
     )
 
 
@@ -221,7 +246,7 @@ def import_run(
         db.add(
             ReconciliationEntry(
                 transaction_date=txn_date,
-                date_posted=parse_date(line.date_posted),
+                posted_date=parse_date(line.posted_date),
                 account_no=line.account_no,
                 description=line.description,
                 bank_account_id=bank_account.id,
@@ -229,9 +254,17 @@ def import_run(
                 amount=line.amount,
                 check_invoice_name=line.reference,
                 bank_description=line.bank_description,
-                notes=line.notes,
+                # UNCATEGORIZED_NOTE is a wizard-only review hint (surfaced
+                # in Step 3's "What's wrong" column) - not something that
+                # belongs permanently on the ledger, which already shows
+                # uncategorized rows via a red Statement Description
+                # instead. Only strip that exact auto-generated text, so a
+                # real note the user typed on the line is never lost.
+                notes="" if line.notes == UNCATEGORIZED_NOTE else line.notes,
                 dedup_key=key,
                 source_run_id=run.id,
+                source_file_name=run.stripe_filename if line.source == "stripe" else run.bank_filename,
+                source_file_link=run.stripe_file_link if line.source == "stripe" else run.bank_file_link,
             )
         )
         imported += 1

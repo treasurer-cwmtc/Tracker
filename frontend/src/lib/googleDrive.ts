@@ -106,7 +106,6 @@ async function getAccessToken(): Promise<string> {
 }
 
 const DRIVE_FILES_API = "https://www.googleapis.com/drive/v3/files";
-const RECEIPTS_ROOT_FOLDER_NAME = "Cross Way Ledger Receipts";
 
 /** Finds a folder by exact name (optionally under a parent), among folders
  * this app can see - which, under the drive.file scope, means only folders
@@ -146,46 +145,38 @@ async function getOrCreateFolder(name: string, parentId: string | null, token: s
   return createFolder(name, parentId, token);
 }
 
-/** Resolves (creating if needed) "Cross Way Ledger Receipts/<year>" in the
- * user's Drive, so uploaded receipts land in a dated folder instead of
- * Drive's root. */
-async function getReceiptsFolderForYear(token: string, year: number): Promise<string> {
-  const root = await getOrCreateFolder(RECEIPTS_ROOT_FOLDER_NAME, null, token);
-  return getOrCreateFolder(String(year), root, token);
-}
-
 // --------------------------------------------------------------------------
-// Pledge Campaign import archiving: every donations/pledges/donors CSV
-// uploaded through the Import Campaigns wizard is also archived to Drive,
-// under a shared folder the treasurer already uses -
-// <CAMPAIGN_IMPORTS_ROOT_FOLDER_ID>/Campaign/<campaign name>/<file> - so a
-// row in the app can always be traced back to the exact file it came from.
+// Everything this app files in Drive - receipts, archived Bank/Stripe
+// upload CSVs, and archived pledge-campaign import CSVs - lives under one
+// shared root folder ("Cross Way Ledger" in the treasurer's Drive),
+// organized by the app's own Current Year (Config's Fiscal Year card, not
+// the real device date): <ROOT>/<year>/<file>, with campaign imports
+// additionally nested under <ROOT>/<year>/Campaign/<campaign name>/<file>.
 // --------------------------------------------------------------------------
 
 // A real, existing folder in the treasurer's Drive (not one this app
 // created) - under drive.file scope the app can only read/write it once the
 // user has explicitly granted access to it via the Picker (see
-// ensureCampaignImportsRootAccess below), which only has to happen once.
-const CAMPAIGN_IMPORTS_ROOT_FOLDER_ID = "1xc26-KngtfILik8Y2_8GA--6pJRYkK7P";
-const CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY = "cwl_drive_campaign_imports_access_granted";
+// ensureRootAccess below), which only has to happen once.
+const ROOT_FOLDER_ID = "1xc26-KngtfILik8Y2_8GA--6pJRYkK7P";
+const ROOT_ACCESS_CACHE_KEY = "cwl_drive_campaign_imports_access_granted";
 
 /** Grants (one time only, cached in localStorage) this app's drive.file
- * token access to CAMPAIGN_IMPORTS_ROOT_FOLDER_ID. Since that folder
- * already exists and wasn't created by this app, drive.file scope can't
- * see it until the user explicitly selects it through the Picker once -
- * after that, the grant persists across sessions the same way a receipt
- * upload's folder does. */
-async function ensureCampaignImportsRootAccess(token: string): Promise<void> {
-  if (localStorage.getItem(CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY) === CAMPAIGN_IMPORTS_ROOT_FOLDER_ID) {
+ * token access to ROOT_FOLDER_ID. Since that folder already exists and
+ * wasn't created by this app, drive.file scope can't see it until the user
+ * explicitly selects it through the Picker once - after that, the grant
+ * persists across sessions. */
+async function ensureRootAccess(token: string): Promise<void> {
+  if (localStorage.getItem(ROOT_ACCESS_CACHE_KEY) === ROOT_FOLDER_ID) {
     return;
   }
   // Already accessible (e.g. granted in an earlier browser profile/session
   // via a previous Picker selection) - skip prompting again.
-  const probe = await fetch(`${DRIVE_FILES_API}/${CAMPAIGN_IMPORTS_ROOT_FOLDER_ID}?fields=id`, {
+  const probe = await fetch(`${DRIVE_FILES_API}/${ROOT_FOLDER_ID}?fields=id`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (probe.ok) {
-    localStorage.setItem(CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY, CAMPAIGN_IMPORTS_ROOT_FOLDER_ID);
+    localStorage.setItem(ROOT_ACCESS_CACHE_KEY, ROOT_FOLDER_ID);
     return;
   }
 
@@ -198,12 +189,12 @@ async function ensureCampaignImportsRootAccess(token: string): Promise<void> {
     try {
       const view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
         .setSelectFolderEnabled(true)
-        .setParent(CAMPAIGN_IMPORTS_ROOT_FOLDER_ID);
+        .setParent(ROOT_FOLDER_ID);
       const picker = new google.picker.PickerBuilder()
         .addView(view)
         .setOAuthToken(token)
         .setDeveloperKey(API_KEY)
-        .setTitle("Select this folder to allow Cross Way Ledger to save import files here")
+        .setTitle("Select this folder to allow Cross Way Ledger to save files here")
         .setCallback((data: any) => {
           if (data.action === google.picker.Action.PICKED) resolve(true);
           else if (data.action === google.picker.Action.CANCEL) resolve(false);
@@ -216,15 +207,23 @@ async function ensureCampaignImportsRootAccess(token: string): Promise<void> {
   });
   if (!granted) {
     throw new Error(
-      "Google Drive access to the campaign imports folder wasn't granted - select the folder to continue."
+      "Google Drive access to the shared folder wasn't granted - select the folder to continue."
     );
   }
-  localStorage.setItem(CAMPAIGN_IMPORTS_ACCESS_CACHE_KEY, CAMPAIGN_IMPORTS_ROOT_FOLDER_ID);
+  localStorage.setItem(ROOT_ACCESS_CACHE_KEY, ROOT_FOLDER_ID);
 }
 
-async function getCampaignImportFolder(campaignName: string, token: string): Promise<string> {
-  await ensureCampaignImportsRootAccess(token);
-  const campaignsFolder = await getOrCreateFolder("Campaign", CAMPAIGN_IMPORTS_ROOT_FOLDER_ID, token);
+/** Resolves (creating if needed) "<ROOT>/<year>" - the shared destination
+ * for receipts, archived Bank/Stripe upload CSVs, and (nested one level
+ * further, see getCampaignImportFolder) campaign import CSVs. */
+async function getYearFolder(token: string, year: number): Promise<string> {
+  await ensureRootAccess(token);
+  return getOrCreateFolder(String(year), ROOT_FOLDER_ID, token);
+}
+
+async function getCampaignImportFolder(campaignName: string, token: string, year: number): Promise<string> {
+  const yearFolder = await getYearFolder(token, year);
+  const campaignsFolder = await getOrCreateFolder("Campaign", yearFolder, token);
   return getOrCreateFolder(campaignName, campaignsFolder, token);
 }
 
@@ -245,14 +244,39 @@ async function uploadFileDirect(file: File, folderId: string, token: string, nam
 /** Archives an already-in-hand File (from a plain <input type="file">, not
  * the Picker - the import wizard needs the file's own content to import,
  * so it can't be picked from Drive first) to
- * "<shared imports folder>/Campaign/<campaign name>/<date>_<original name>".
+ * "<ROOT>/<year>/Campaign/<campaign name>/<date>_<original name>".
  * Prefixed with today's date so re-uploading the same filename for a
  * correction doesn't silently overwrite the original in the audit trail. */
-export async function uploadCampaignImportFile(campaignName: string, file: File): Promise<PickedFile> {
+export async function uploadCampaignImportFile(
+  campaignName: string,
+  file: File,
+  year: number
+): Promise<PickedFile> {
   const token = await getAccessToken();
-  const folderId = await getCampaignImportFolder(campaignName, token);
+  const folderId = await getCampaignImportFolder(campaignName, token, year);
   const datePrefix = new Date().toISOString().slice(0, 10);
   return uploadFileDirect(file, folderId, token, `${datePrefix}_${file.name}`);
+}
+
+/** Archives an already-in-hand Bank or Stripe upload-wizard statement File
+ * to "<ROOT>/<year>/<date>_<original name>" - same idea as
+ * uploadCampaignImportFile, just filed directly in the year folder rather
+ * than a Campaign subfolder. */
+export async function uploadBankOrStripeFile(file: File, year: number): Promise<PickedFile> {
+  const token = await getAccessToken();
+  const folderId = await getYearFolder(token, year);
+  const datePrefix = new Date().toISOString().slice(0, 10);
+  return uploadFileDirect(file, folderId, token, `${datePrefix}_${file.name}`);
+}
+
+/** Proactively creates "<ROOT>/<year>" - called when the treasurer saves a
+ * new Current Year Date on the Config tab, so the folder exists up front
+ * rather than only appearing the first time something happens to be
+ * uploaded. Best-effort: callers should treat a failure here as a warning,
+ * never as blocking the Current Year Date save itself. */
+export async function ensureYearFolderExists(year: number): Promise<void> {
+  const token = await getAccessToken();
+  await getYearFolder(token, year);
 }
 
 function openPicker(accessToken: string, uploadFolderId: string | null): Promise<PickedFile | null> {
@@ -334,7 +358,7 @@ export async function pickMultipleReceiptFiles(): Promise<PickedFile[]> {
  * (prompting for consent on first use), open the Picker (upload new or pick
  * existing), and resolve with the chosen file - or null if the user
  * cancelled. When `year` is given, a new upload is filed under
- * "Cross Way Ledger Receipts/<year>" instead of Drive's root - if that setup
+ * "Cross Way Ledger/<year>" instead of Drive's root - if that setup
  * step fails for any reason, the upload still proceeds, just into the root,
  * rather than blocking the whole attach flow. */
 export async function pickReceiptFile(opts?: { year?: number }): Promise<PickedFile | null> {
@@ -343,7 +367,7 @@ export async function pickReceiptFile(opts?: { year?: number }): Promise<PickedF
   let uploadFolderId: string | null = null;
   if (opts?.year) {
     try {
-      uploadFolderId = await getReceiptsFolderForYear(token, opts.year);
+      uploadFolderId = await getYearFolder(token, opts.year);
     } catch {
       uploadFolderId = null;
     }

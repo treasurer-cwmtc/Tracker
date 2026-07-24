@@ -183,6 +183,12 @@ class CategoryRule(Base):
     rule_type: Mapped[str] = mapped_column(String(20), index=True)
     pattern: Mapped[str] = mapped_column(String(200))
     account_no: Mapped[str] = mapped_column(ForeignKey("chart_of_accounts.account_no"))
+    # Optional friendly "who/what" name to also stamp onto a matched bank
+    # line's Description field (e.g. "Sams Club", "Direct Energy") - mirrors
+    # the payee-name column on the treasurer's own upload-template
+    # spreadsheet. Only applied for bank_keyword rules; harmless/unused on
+    # stripe_fund rules, which already get a real donor name.
+    description: Mapped[str] = mapped_column(String(200), default="")
     priority: Mapped[int] = mapped_column(Integer, default=100)
     active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -199,6 +205,11 @@ class ReconRun(Base):
     )
     bank_filename: Mapped[str] = mapped_column(String(260), default="")
     stripe_filename: Mapped[str] = mapped_column(String(260), default="")
+    # Google Drive webViewLink for the archived copy of each raw upload -
+    # blank if the archive-to-Drive step failed or was skipped, which never
+    # blocks the import itself (see uploadBankOrStripeFile/googleDrive.ts).
+    bank_file_link: Mapped[str] = mapped_column(String(1000), default="")
+    stripe_file_link: Mapped[str] = mapped_column(String(1000), default="")
     bank_line_count: Mapped[int] = mapped_column(Integer, default=0)
     stripe_line_count: Mapped[int] = mapped_column(Integer, default=0)
     matched_payout_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -209,8 +220,8 @@ class ReconRun(Base):
     # doesn't need the original file re-uploaded or re-parsed later.
     raw_bank_income_total: Mapped[float] = mapped_column(Float, default=0.0)
     raw_bank_expense_total: Mapped[float] = mapped_column(Float, default=0.0)
-    # Sum of the ORIGINAL bank-payout-placeholder amounts per date_posted,
-    # captured once at merge-stripe time (keyed by date_posted string) - an
+    # Sum of the ORIGINAL bank-payout-placeholder amounts per posted_date,
+    # captured once at merge-stripe time (keyed by posted_date string) - an
     # independent reference so the wizard's by-day check compares against
     # the bank's own number, not just re-summing the same lines it's
     # displaying. Diverges from the live Stripe total only if a line gets
@@ -233,7 +244,7 @@ class ReconLine(Base):
 
     source: Mapped[str] = mapped_column(String(20))  # 'stripe' | 'bank'
     transaction_date: Mapped[str] = mapped_column(String(20), default="")
-    date_posted: Mapped[str] = mapped_column(String(20), default="")
+    posted_date: Mapped[str] = mapped_column(String(20), default="")
     description: Mapped[str] = mapped_column(String(300), default="")  # donor / payee
     statement_description: Mapped[str] = mapped_column(String(300), default="")  # COA
     account_no: Mapped[str] = mapped_column(String(20), default="")
@@ -282,7 +293,7 @@ class ReconciliationEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
+    posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
@@ -297,10 +308,19 @@ class ReconciliationEntry(Base):
     check_invoice_name: Mapped[str] = mapped_column(String(200), default="")
     bank_description: Mapped[str] = mapped_column(Text, default="")
     notes: Mapped[str] = mapped_column(String(300), default="")
-    dedup_key: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    # 1500, not 300 - falls back to the full (unbounded Text) bank_description
+    # when there's no check/invoice name, and some Chase ACH descriptor lines
+    # run past 300 characters on their own (see build_dedup_key).
+    dedup_key: Mapped[str] = mapped_column(String(1500), unique=True, index=True)
     source_run_id: Mapped[int | None] = mapped_column(
         ForeignKey("recon_runs.id"), nullable=True
     )
+    # The raw bank/Stripe upload file this line came from - carried down from
+    # the ReconRun's own bank_filename/bank_file_link (or stripe_ equivalent,
+    # per this line's own `source`) at import time, so any row can be traced
+    # back to the exact Google Drive file it originated from for an audit.
+    source_file_name: Mapped[str] = mapped_column(String(300), default="")
+    source_file_link: Mapped[str] = mapped_column(String(1000), default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -343,7 +363,7 @@ class AccrualEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
-    date_posted: Mapped[date | None] = mapped_column(Date, nullable=True)
+    posted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     is_reimbursement: Mapped[bool] = mapped_column(Boolean, default=False)
     account_no: Mapped[str | None] = mapped_column(
@@ -414,6 +434,39 @@ class BudgetEntry(Base):
     )
 
     @validates("account_no")
+    def _validate_account_no(self, key, value):
+        return _normalize_account_no(self, key, value)
+
+
+class RestrictedTransferEntry(Base):
+    """One permanent reclassification between two Chart-of-Accounts lines -
+    "Restricted Net Assets" tab. Unlike Accrual (a placeholder meant to
+    eventually be cleared by a real bank transaction), a transfer *is* the
+    permanent economic event: money already earmarked in a restricted fund
+    is released into the account being funded (or vice versa, setting more
+    money aside), with no bank transaction to ever match against. Stored as
+    a single row with both legs (from_account_no, to_account_no) rather than
+    two rows that only net out by convention - General Ledger synthesizes
+    the two per-account lines from this one row at read time."""
+
+    __tablename__ = "restricted_transfer_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    transaction_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    from_account_no: Mapped[str | None] = mapped_column(
+        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+    )
+    to_account_no: Mapped[str | None] = mapped_column(
+        ForeignKey("chart_of_accounts.account_no"), nullable=True, default=None
+    )
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    description: Mapped[str] = mapped_column(String(300), default="")
+    notes: Mapped[str] = mapped_column(String(300), default="")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    @validates("from_account_no", "to_account_no")
     def _validate_account_no(self, key, value):
         return _normalize_account_no(self, key, value)
 

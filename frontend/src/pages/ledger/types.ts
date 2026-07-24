@@ -8,7 +8,7 @@
 export interface LedgerEntry {
   id: number;
   transaction_date: string | null; // YYYY-MM-DD
-  date_posted: string | null;
+  posted_date: string | null;
   reconciled: boolean;
   is_reimbursement: boolean;
   account_no: string;
@@ -24,6 +24,11 @@ export interface LedgerEntry {
   receipt_file_id: string;
   receipt_file_name: string;
   receipt_web_view_link: string;
+  // The raw bank/Stripe upload file this entry came from (Reconciliation
+  // only - always blank on Accrual, which has no Upload run to trace back
+  // to). Carried down from the Upload run at import time.
+  source_file_name: string;
+  source_file_link: string;
   // Derived live from the linked Chart of Accounts row - read-only.
   statement_description: string;
   category: string;
@@ -37,7 +42,7 @@ export interface LedgerEntry {
 
 export interface LedgerEntryUpdate {
   transaction_date?: string | null;
-  date_posted?: string | null;
+  posted_date?: string | null;
   reconciled?: boolean;
   is_reimbursement?: boolean;
   account_no?: string;

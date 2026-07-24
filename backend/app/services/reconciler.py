@@ -14,12 +14,17 @@ from datetime import date, datetime
 from .categorizer import Categorizer
 from .parsers import BankRow, StripeRow
 
+# A wizard-only review hint, not a real user note - reconciliation.py's
+# import_run strips this exact text back out so it never ends up
+# permanently on the Actual/Accrual ledger's Notes field.
+UNCATEGORIZED_NOTE = "Uncategorized - add a rule"
+
 
 @dataclass
 class OutputLine:
     source: str
     transaction_date: str = ""
-    date_posted: str = ""
+    posted_date: str = ""
     description: str = ""
     statement_description: str = ""
     account_no: str = ""
@@ -70,12 +75,14 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
     return OutputLine(
         source="bank",
         transaction_date=bank.posting_date,
-        date_posted=bank.posting_date,
+        posted_date=bank.posting_date,
         # Description is a human-entered name (who/what), not the
         # raw bank statement text - leave it blank when we don't
         # know it rather than dumping the full ACH/CO NAME string.
-        # The raw text is still preserved in bank_description.
-        description="",
+        # The raw text is still preserved in bank_description. A
+        # matching rule's own friendly name (e.g. "Sams Club") fills
+        # this in automatically when one is set.
+        description=cat.description,
         statement_description=cat.statement_description,
         account_no=cat.account_no,
         category=cat.category or ("Income" if bank.amount > 0 else "Expense"),
@@ -84,7 +91,7 @@ def _categorize_bank_row(bank: BankRow, categorizer: Categorizer) -> OutputLine:
         reference=bank.raw.get("Check or Slip #", "") or "",
         bank_description=bank.description,
         matched=bool(cat.account_no),
-        notes="" if cat.account_no else "Uncategorized - add a rule",
+        notes="" if cat.account_no else UNCATEGORIZED_NOTE,
     )
 
 
@@ -104,7 +111,7 @@ def _categorize_stripe_payout_row(
                 OutputLine(
                     source="stripe",
                     transaction_date=bank.posting_date,
-                    date_posted=bank.posting_date,
+                    posted_date=bank.posting_date,
                     description="UNMATCHED STRIPE PAYOUT",
                     method="Stripe",
                     amount=bank.amount,
@@ -124,7 +131,7 @@ def _categorize_stripe_payout_row(
                 OutputLine(
                     source="stripe",
                     transaction_date=bank.posting_date,
-                    date_posted=bank.posting_date,
+                    posted_date=bank.posting_date,
                     description="STRIPE PAYOUT (no donation detail)",
                     method="Stripe",
                     amount=bank.amount,
@@ -146,7 +153,7 @@ def _categorize_stripe_payout_row(
             OutputLine(
                 source="stripe",
                 transaction_date=d.created,
-                date_posted=bank.posting_date,
+                posted_date=bank.posting_date,
                 description=d.donor or d.description,
                 statement_description=cat.statement_description,
                 account_no=cat.account_no,
@@ -165,7 +172,7 @@ def _categorize_stripe_payout_row(
             OutputLine(
                 source="stripe",
                 transaction_date=bank.posting_date,
-                date_posted=bank.posting_date,
+                posted_date=bank.posting_date,
                 description="STRIPE PAYOUT ADJUSTMENT",
                 method="Stripe",
                 amount=delta,
@@ -227,7 +234,7 @@ def categorize_bank_only(
                 OutputLine(
                     source="bank",
                     transaction_date=bank.posting_date,
-                    date_posted=bank.posting_date,
+                    posted_date=bank.posting_date,
                     category="Pending Stripe match",
                     method=bank.type,
                     amount=bank.amount,

@@ -5,7 +5,7 @@ export interface ReconLine {
   id: number;
   source: "stripe" | "bank";
   transaction_date: string;
-  date_posted: string;
+  posted_date: string;
   description: string;
   statement_description: string;
   account_no: string;
@@ -33,6 +33,8 @@ export interface ReconRun {
   created_at: string;
   bank_filename: string;
   stripe_filename: string;
+  bank_file_link: string;
+  stripe_file_link: string;
   bank_line_count: number;
   stripe_line_count: number;
   matched_payout_count: number;
@@ -73,10 +75,14 @@ export const reconcileApi = {
   },
 
   /** Wizard step 1: bank file only - Stripe-payout lines come back as
-   * unmatched placeholders, merged in later via mergeStripe(). */
-  bankOnly: (bankFile: File) => {
+   * unmatched placeholders, merged in later via mergeStripe(). bankFileLink
+   * (if the file was successfully archived to Google Drive first) is
+   * carried onto every ReconciliationEntry this run eventually produces, for
+   * an audit trail back to the exact file it came from. */
+  bankOnly: (bankFile: File, bankFileLink?: string) => {
     const fd = new FormData();
     fd.append("bank_file", bankFile);
+    if (bankFileLink) fd.append("bank_file_link", bankFileLink);
     return fetch(`${BASE}/api/reconcile`, {
       method: "POST",
       headers: authHeaders(),
@@ -92,10 +98,13 @@ export const reconcileApi = {
     }).then(j<ReconLine>),
 
   /** Wizard step 3: match the Stripe file against this run's bank-payout
-   * placeholders. Every other line (including edits from step 1) survives. */
-  mergeStripe: (runId: number, stripeFile: File) => {
+   * placeholders. Every other line (including edits from step 1) survives.
+   * stripeFileLink carries the archived-to-Drive copy's link the same way
+   * bankOnly's bankFileLink does. */
+  mergeStripe: (runId: number, stripeFile: File, stripeFileLink?: string) => {
     const fd = new FormData();
     fd.append("stripe_file", stripeFile);
+    if (stripeFileLink) fd.append("stripe_file_link", stripeFileLink);
     return fetch(`${BASE}/api/reconcile/${runId}/merge-stripe`, {
       method: "POST",
       headers: authHeaders(),

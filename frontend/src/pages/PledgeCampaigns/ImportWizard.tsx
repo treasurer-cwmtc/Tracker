@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { pledgeCampaignsApi, PledgeCampaign, PledgeDashboard, Pledge } from "../../api/pledgeCampaigns";
 import { donationsApi, FundSummary } from "../../api/donations";
 import { uploadCampaignImportFile, PickedFile } from "../../lib/googleDrive";
+import { getCurrentFiscalYear } from "../../api/settings";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 const STEPS = [
   { key: 1, label: "Campaign" },
@@ -50,19 +52,39 @@ function Stepper(props: { step: number; maxStepReached: number; onJump: (s: numb
  * values - "a number of pledges were updated" isn't enough to spot-check an
  * import; seeing exactly which rows and what they now say is. */
 function PledgeResultsTable({ title, pledges }: { title: string; pledges: Pledge[] }) {
+  const { widths, startResize } = useColumnWidths("pledge-import-results");
   if (pledges.length === 0) return null;
   return (
     <>
       <h4>{title}</h4>
       <div className="table-wrap">
-        <table>
+        <table className="resizable-cols">
+          <ColGroup
+            columns={["name", "email", "pledged_amount", "due_date", "matched_donor"]}
+            widths={widths}
+          />
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Email</th>
-              <th>Pledged Amount</th>
-              <th>Delivery by Date</th>
-              <th>Matched Donor</th>
+              <th>
+                Name
+                <ColResizeHandle col="name" startResize={startResize} />
+              </th>
+              <th>
+                Email
+                <ColResizeHandle col="email" startResize={startResize} />
+              </th>
+              <th>
+                Pledged Amount
+                <ColResizeHandle col="pledged_amount" startResize={startResize} />
+              </th>
+              <th>
+                Delivery by Date
+                <ColResizeHandle col="due_date" startResize={startResize} />
+              </th>
+              <th>
+                Matched Donor
+                <ColResizeHandle col="matched_donor" startResize={startResize} />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -101,6 +123,7 @@ export default function ImportWizard() {
   const [maxStepReached, setMaxStepReached] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { widths: fundWidths, startResize: startFundResize } = useColumnWidths("pledge-import-funds");
 
   const campaign = campaigns?.find((c) => c.id === campaignId) ?? null;
 
@@ -183,9 +206,9 @@ export default function ImportWizard() {
     donationsApi.funds().then(setFunds).catch(() => setFunds([]));
   }, []);
 
-  // Every upload in this wizard is also archived to Google Drive (Campaign
-  // Imports folder / Campaign / <campaign name> / <file>) so a row can
-  // always be traced back to the exact file it came from. A Drive failure
+  // Every upload in this wizard is also archived to Google Drive
+  // (<current year>/Campaign/<campaign name>/<file>) so a row can always be
+  // traced back to the exact file it came from. A Drive failure
   // (not configured, popup blocked, network hiccup) never blocks the
   // actual data import - it just means that one import's rows won't have
   // a source file reference, surfaced as a dismissable warning instead.
@@ -195,7 +218,8 @@ export default function ImportWizard() {
     if (!campaign) return null;
     try {
       setDriveWarning("");
-      return await uploadCampaignImportFile(campaign.name, file);
+      const year = await getCurrentFiscalYear();
+      return await uploadCampaignImportFile(campaign.name, file, year);
     } catch (err) {
       setDriveWarning(
         `Couldn't save a copy to Google Drive (${(err as Error).message}) - the import will still proceed, ` +
@@ -433,13 +457,25 @@ export default function ImportWizard() {
             <>
               <h4>Funds on file</h4>
               <div className="table-wrap">
-                <table>
+                <table className="resizable-cols">
+                  <ColGroup columns={["fund", "gifts", "total", "actions"]} widths={fundWidths} />
                   <thead>
                     <tr>
-                      <th>Fund</th>
-                      <th># Gifts</th>
-                      <th>Total</th>
-                      <th></th>
+                      <th>
+                        Fund
+                        <ColResizeHandle col="fund" startResize={startFundResize} />
+                      </th>
+                      <th>
+                        # Gifts
+                        <ColResizeHandle col="gifts" startResize={startFundResize} />
+                      </th>
+                      <th>
+                        Total
+                        <ColResizeHandle col="total" startResize={startFundResize} />
+                      </th>
+                      <th>
+                        <ColResizeHandle col="actions" startResize={startFundResize} />
+                      </th>
                     </tr>
                   </thead>
                   <tbody>

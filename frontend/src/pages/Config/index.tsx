@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { settingsApi } from "../../api/settings";
 import { bankAccountsApi, BankAccount } from "../../api/bankAccounts";
+import { ensureYearFolderExists } from "../../lib/googleDrive";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 
 function addDays(iso: string, days: number): string {
   const d = new Date(iso + "T00:00:00Z");
@@ -37,6 +39,7 @@ function BankAccountsCard() {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const { widths, startResize } = useColumnWidths("config-bank-accounts");
 
   async function load() {
     try {
@@ -79,11 +82,17 @@ function BankAccountsCard() {
         The accounts available to tag when uploading a bank statement on the
         Upload tab.
       </p>
-      <table>
+      <table className="resizable-cols">
+        <ColGroup columns={["name", "actions"]} widths={widths} />
         <thead>
           <tr>
-            <th>Name</th>
-            <th></th>
+            <th>
+              Name
+              <ColResizeHandle col="name" startResize={startResize} />
+            </th>
+            <th>
+              <ColResizeHandle col="actions" startResize={startResize} />
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -132,6 +141,7 @@ function FiscalYearCard() {
   const [currentYearDate, setCurrentYearDate] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [driveWarning, setDriveWarning] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -147,11 +157,23 @@ function FiscalYearCard() {
   async function save() {
     setError("");
     setSaved(false);
+    setDriveWarning("");
     try {
       await settingsApi.update("prior_year_end_date", priorYearDate);
       setSaved(true);
     } catch (err) {
       setError((err as Error).message);
+      return;
+    }
+    // Best-effort: creates <Cross Way Ledger>/<year> in Drive right
+    // away, so it's there before anything needs to upload into it. Never
+    // blocks the Current Year Date save itself.
+    try {
+      await ensureYearFolderExists(Number(yearOf(currentYearDate)));
+    } catch (err) {
+      setDriveWarning(
+        `Saved, but couldn't create this year's Google Drive folder (${(err as Error).message}).`
+      );
     }
   }
 
@@ -170,7 +192,7 @@ function FiscalYearCard() {
       ) : (
         <>
           <div className="row">
-            <label className="field">
+            <label className="field" style={{ maxWidth: 180 }}>
               <span>Current Year Date</span>
               <input
                 type="date"
@@ -202,6 +224,7 @@ function FiscalYearCard() {
             </button>
             {saved && <span className="ok">Saved.</span>}
           </div>
+          {driveWarning && <div className="error">{driveWarning}</div>}
         </>
       )}
       {error && <div className="error">{error}</div>}

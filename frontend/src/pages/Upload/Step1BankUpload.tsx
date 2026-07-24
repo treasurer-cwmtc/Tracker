@@ -2,7 +2,10 @@ import { useMemo, useState } from "react";
 import { ChartAccount } from "../../api/accounts";
 import { BankAccount } from "../../api/bankAccounts";
 import { reconcileApi, ReconLine, ReconRun } from "../../api/reconcile";
-import { rulesApi } from "../../api/rules";
+import { Rule, rulesApi } from "../../api/rules";
+import { getCurrentFiscalYear } from "../../api/settings";
+import { uploadBankOrStripeFile } from "../../lib/googleDrive";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../../components/ColumnResize";
 import AccountPicker from "../ledger/AccountPicker";
 import WizardLineModal from "./WizardLineModal";
 import WizardLineRow from "./WizardLineRow";
@@ -14,12 +17,14 @@ export default function Step1BankUpload(props: {
   onBankAccountChange: (id: number | "") => void;
   run: ReconRun | null;
   onRunChange: (run: ReconRun) => void;
+  onRuleAdded: (rule: Rule) => void;
   onNext: () => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [opened, setOpened] = useState<ReconLine | null>(null);
+  const { widths, startResize } = useColumnWidths("upload-step1-bank-preview");
 
   const run = props.run;
 
@@ -27,8 +32,20 @@ export default function Step1BankUpload(props: {
     if (!file) return;
     setBusy(true);
     setError("");
+    // Archive the raw statement to Google Drive first - a failure here
+    // (Drive not configured, popup blocked, network hiccup) never blocks
+    // the actual import, it just means this run's lines won't have a
+    // source file link for the audit trail.
+    let bankFileLink: string | undefined;
     try {
-      props.onRunChange(await reconcileApi.bankOnly(file));
+      const year = await getCurrentFiscalYear();
+      const archived = await uploadBankOrStripeFile(file, year);
+      bankFileLink = archived.url;
+    } catch {
+      bankFileLink = undefined;
+    }
+    try {
+      props.onRunChange(await reconcileApi.bankOnly(file, bankFileLink));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -126,14 +143,33 @@ export default function Step1BankUpload(props: {
               Lines with no data yet (like remote deposits) are fine to leave as-is.
             </p>
             <div className="table-wrap">
-              <table>
+              <table className="resizable-cols">
+                <ColGroup
+                  columns={["date", "bank_description", "amount", "category", "status"]}
+                  widths={widths}
+                />
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Bank Description</th>
-                    <th className="num">Amount</th>
-                    <th>Category</th>
-                    <th>Status</th>
+                    <th>
+                      Date
+                      <ColResizeHandle col="date" startResize={startResize} />
+                    </th>
+                    <th>
+                      Bank Description
+                      <ColResizeHandle col="bank_description" startResize={startResize} />
+                    </th>
+                    <th className="num">
+                      Amount
+                      <ColResizeHandle col="amount" startResize={startResize} />
+                    </th>
+                    <th>
+                      Category
+                      <ColResizeHandle col="category" startResize={startResize} />
+                    </th>
+                    <th>
+                      Status
+                      <ColResizeHandle col="status" startResize={startResize} />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,7 +199,10 @@ export default function Step1BankUpload(props: {
                   key={desc}
                   description={desc}
                   accounts={props.accounts.filter((a) => a.category === "Expense")}
-                  onAdded={refreshRun}
+                  onAdded={(rule) => {
+                    props.onRuleAdded(rule);
+                    refreshRun();
+                  }}
                 />
               ))}
             </div>
@@ -201,7 +240,7 @@ export default function Step1BankUpload(props: {
 function AddKeywordRuleRow(props: {
   description: string;
   accounts: ChartAccount[];
-  onAdded: () => void;
+  onAdded: (rule: Rule) => void;
 }) {
   // Pre-filled with the full raw line, but editable - trim it down to just
   // the meaningful part (e.g. the payee name) so the rule matches every
@@ -216,7 +255,7 @@ function AddKeywordRuleRow(props: {
     setBusy(true);
     setError("");
     try {
-      await rulesApi.createRule({
+      const rule = await rulesApi.createRule({
         rule_type: "bank_keyword",
         pattern: pattern.trim(),
         account_no: accountNo,
@@ -225,7 +264,7 @@ function AddKeywordRuleRow(props: {
       // Re-checks every still-uncategorized line against the current rule
       // set (including this new one), so any other line containing the
       // same keyword gets picked up automatically, not just this one.
-      props.onAdded();
+      props.onAdded(rule);
     } catch (e) {
       setError((e as Error).message);
     } finally {

@@ -1,7 +1,7 @@
 import csv
 import io
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -29,7 +29,7 @@ router = APIRouter(
 
 EXPORT_COLUMNS = [
     ("transaction_date", "Transaction Date"),
-    ("date_posted", "Date Posted"),
+    ("posted_date", "Posted Date"),
     ("description", "Description"),
     ("statement_description", "Statement Description"),
     ("account_no", "Account No"),
@@ -54,6 +54,8 @@ async def _read_csv(file: UploadFile) -> str:
 async def run_reconciliation(
     bank_file: UploadFile = File(...),
     stripe_file: UploadFile | None = File(None),
+    bank_file_link: str = Form(""),
+    stripe_file_link: str = Form(""),
     db: Session = Depends(get_db),
 ) -> ReconRun:
     bank_rows = parse_bank_csv(await _read_csv(bank_file))
@@ -88,6 +90,8 @@ async def run_reconciliation(
     run = ReconRun(
         bank_filename=bank_file.filename or "",
         stripe_filename=stripe_filename,
+        bank_file_link=bank_file_link,
+        stripe_file_link=stripe_file_link if stripe_file is not None else "",
         bank_line_count=result.bank_line_count,
         stripe_line_count=stripe_line_count,
         matched_payout_count=matched_payout_count,
@@ -134,6 +138,7 @@ def update_line(
 async def merge_stripe_endpoint(
     run_id: int,
     stripe_file: UploadFile = File(...),
+    stripe_file_link: str = Form(""),
     db: Session = Depends(get_db),
 ) -> ReconRun:
     """Wizard step 3: match the Stripe file against this run's bank-payout
@@ -151,7 +156,7 @@ async def merge_stripe_endpoint(
     placeholder_bank_rows = [
         BankRow(
             details="",
-            posting_date=line.date_posted,
+            posting_date=line.posted_date,
             description=line.bank_description,
             amount=line.amount,
             type=line.method,
@@ -171,6 +176,7 @@ async def merge_stripe_endpoint(
         db.add(ReconLine(run_id=run.id, **out_line.as_dict()))
 
     run.stripe_filename = stripe_file.filename or ""
+    run.stripe_file_link = stripe_file_link
     run.stripe_line_count = result.stripe_line_count
     run.matched_payout_count = result.matched_payout_count
     run.unmatched_stripe_bank_count = result.unmatched_stripe_bank_count
@@ -202,6 +208,8 @@ def recategorize_endpoint(run_id: int, db: Session = Depends(get_db)) -> ReconRu
                 line.account_no = cat.account_no
                 line.statement_description = cat.statement_description
                 line.category = cat.category
+                if cat.description:
+                    line.description = cat.description
                 line.matched = True
                 line.notes = ""
     db.commit()

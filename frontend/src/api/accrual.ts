@@ -10,7 +10,7 @@ export type { SplitLine };
 
 export interface AccrualEntryCreate {
   transaction_date?: string | null;
-  date_posted?: string | null;
+  posted_date?: string | null;
   reconciled?: boolean;
   is_reimbursement?: boolean;
   account_no?: string;
@@ -29,8 +29,8 @@ export interface SplitGroup {
 }
 
 export const accrualApi = {
-  list: () =>
-    fetch(`${BASE}/api/accrual`, { headers: authHeaders() }).then(j<AccrualEntry[]>),
+  list: (year?: number) =>
+    fetch(`${BASE}/api/accrual${year ? `?year=${year}` : ""}`, { headers: authHeaders() }).then(j<AccrualEntry[]>),
 
   create: (payload: AccrualEntryCreate) =>
     fetch(`${BASE}/api/accrual`, {

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { authApi, User } from "../api/auth";
+import { ColGroup, ColResizeHandle, useColumnWidths } from "../components/ColumnResize";
 
 // Matches the backend's GRANTABLE_PERMISSIONS (app/deps.py) and the
 // corresponding Tab keys in App.tsx - kept as its own small list here since
@@ -15,6 +16,7 @@ const GRANTABLE_PAGES: { keys: string[]; label: string }[] = [
   { keys: ["reconciliation"], label: "Actual" },
   { keys: ["accrual"], label: "Accrual" },
   { keys: ["budget"], label: "Budget" },
+  { keys: ["restricted-net-assets"], label: "Restricted Net Assets" },
   { keys: ["general-ledger"], label: "General Ledger" },
   { keys: ["income-statement"], label: "Income Statement" },
   { keys: ["rules"], label: "Rules" },
@@ -43,6 +45,7 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
   const [hideDonorNames, setHideDonorNames] = useState(false);
   const [permError, setPermError] = useState("");
   const [permMsg, setPermMsg] = useState("");
+  const { widths, startResize } = useColumnWidths("users-list");
 
   async function load() {
     try {
@@ -188,15 +191,36 @@ export default function Users({ currentUserId }: { currentUserId: number }) {
 
       <div className="card">
         <h3 style={{ marginTop: 0 }}>Users</h3>
-        <table>
+        <table className="resizable-cols">
+          <ColGroup
+            columns={["username", "email", "admin", "active", "created", "actions"]}
+            widths={widths}
+          />
           <thead>
             <tr>
-              <th>Username</th>
-              <th>Email</th>
-              <th>Admin</th>
-              <th>Active</th>
-              <th>Created</th>
-              <th></th>
+              <th>
+                Username
+                <ColResizeHandle col="username" startResize={startResize} />
+              </th>
+              <th>
+                Email
+                <ColResizeHandle col="email" startResize={startResize} />
+              </th>
+              <th>
+                Admin
+                <ColResizeHandle col="admin" startResize={startResize} />
+              </th>
+              <th>
+                Active
+                <ColResizeHandle col="active" startResize={startResize} />
+              </th>
+              <th>
+                Created
+                <ColResizeHandle col="created" startResize={startResize} />
+              </th>
+              <th>
+                <ColResizeHandle col="actions" startResize={startResize} />
+              </th>
             </tr>
           </thead>
           <tbody>

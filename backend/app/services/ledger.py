@@ -54,7 +54,13 @@ def build_dedup_key(
     (Check/Invoice Name, Bank Description) is available to disambiguate same-
     amount-same-day transactions. Check/Invoice Name (the Stripe txn id or a
     check number) is preferred since it's closest to a true external id;
-    Bank Description is the fallback for plain bank lines."""
-    key_text = (check_invoice_name or bank_description or "").strip().lower()
+    Bank Description is the fallback for plain bank lines.
+
+    Capped well above any real bank description length (see dedup_key's
+    String(1500) column) purely as a defense-in-depth backstop, not as the
+    primary fix - Bank Description is an unbounded Text field on the source
+    row, so relying on truncation alone would risk two distinct long
+    descriptions colliding on their common prefix."""
+    key_text = (check_invoice_name or bank_description or "").strip().lower()[:1450]
     date_part = transaction_date.isoformat() if transaction_date else ""
     return f"{date_part}|{round(amount, 2)}|{key_text}"

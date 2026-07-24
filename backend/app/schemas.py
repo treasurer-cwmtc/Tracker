@@ -86,6 +86,7 @@ class CategoryRuleBase(BaseModel):
     rule_type: str  # 'bank_keyword' | 'stripe_fund'
     pattern: str
     account_no: str
+    description: str = ""
     priority: int = 100
     active: bool = True
 
@@ -98,6 +99,7 @@ class CategoryRuleUpdate(BaseModel):
     rule_type: str | None = None
     pattern: str | None = None
     account_no: str | None = None
+    description: str | None = None
     priority: int | None = None
     active: bool | None = None
 
@@ -115,7 +117,7 @@ class ReconLineOut(BaseModel):
     id: int
     source: str
     transaction_date: str
-    date_posted: str
+    posted_date: str
     description: str
     statement_description: str
     account_no: str
@@ -147,6 +149,8 @@ class ReconRunOut(BaseModel):
     created_at: datetime
     bank_filename: str
     stripe_filename: str
+    bank_file_link: str
+    stripe_file_link: str
     bank_line_count: int
     stripe_line_count: int
     matched_payout_count: int
@@ -251,7 +255,7 @@ class ReconciliationEntryOut(BaseModel):
 
     id: int
     transaction_date: date | None
-    date_posted: date | None
+    posted_date: date | None
     reconciled: bool
     is_reimbursement: bool
     account_no: str
@@ -268,6 +272,8 @@ class ReconciliationEntryOut(BaseModel):
     receipt_file_id: str
     receipt_file_name: str
     receipt_web_view_link: str
+    source_file_name: str
+    source_file_link: str
     # Derived live from the linked Chart of Accounts row (blank if account_no
     # doesn't match any account, e.g. not yet categorized).
     statement_description: str
@@ -282,7 +288,7 @@ class ReconciliationEntryOut(BaseModel):
 
 class ReconciliationEntryUpdate(BaseModel):
     transaction_date: date | None = None
-    date_posted: date | None = None
+    posted_date: date | None = None
     reconciled: bool | None = None
     is_reimbursement: bool | None = None
     account_no: str | None = None
@@ -330,7 +336,7 @@ class AccrualEntryOut(BaseModel):
 
     id: int
     transaction_date: date | None
-    date_posted: date | None
+    posted_date: date | None
     reconciled: bool
     is_reimbursement: bool
     account_no: str
@@ -358,7 +364,7 @@ class AccrualEntryOut(BaseModel):
 
 class AccrualEntryCreate(BaseModel):
     transaction_date: date | None = None
-    date_posted: date | None = None
+    posted_date: date | None = None
     reconciled: bool = False
     is_reimbursement: bool = False
     account_no: str = ""
@@ -373,7 +379,7 @@ class AccrualEntryCreate(BaseModel):
 
 class AccrualEntryUpdate(BaseModel):
     transaction_date: date | None = None
-    date_posted: date | None = None
+    posted_date: date | None = None
     reconciled: bool | None = None
     is_reimbursement: bool | None = None
     account_no: str | None = None
@@ -430,6 +436,36 @@ class BudgetCopyYearRequest(BaseModel):
     overwrite: bool = False
 
 
+class RestrictedTransferEntryOut(BaseModel):
+    id: int
+    transaction_date: date | None
+    from_account_no: str
+    from_statement_description: str
+    to_account_no: str
+    to_statement_description: str
+    amount: float
+    description: str
+    notes: str
+
+
+class RestrictedTransferEntryCreate(BaseModel):
+    transaction_date: date | None = None
+    from_account_no: str = ""
+    to_account_no: str = ""
+    amount: float = 0.0
+    description: str = ""
+    notes: str = ""
+
+
+class RestrictedTransferEntryUpdate(BaseModel):
+    transaction_date: date | None = None
+    from_account_no: str | None = None
+    to_account_no: str | None = None
+    amount: float | None = None
+    description: str | None = None
+    notes: str | None = None
+
+
 class BudgetCopyYearResult(BaseModel):
     copied: int
 
@@ -437,12 +473,15 @@ class BudgetCopyYearResult(BaseModel):
 class GeneralLedgerLineOut(BaseModel):
     """One row of the unioned General Ledger view - Reconciliation and
     Accrual entries plus Budget entries (rendered as a virtual line dated
-    Jan 1 of their year), all in the shape reports are built from."""
+    Jan 1 of their year) plus Restricted Net Assets transfers (each one
+    synthesizing two lines, one per leg), all in the shape reports are
+    built from."""
 
-    source: str  # "reconciliation" | "accrual" | "budget"
+    source: str  # "reconciliation" | "accrual" | "budget" | "restricted_transfer"
     id: int
     transaction_date: date | None
-    date_posted: date | None
+    posted_date: date | None
+    reconciled: bool
     description: str
     account_no: str
     statement_description: str
@@ -450,11 +489,18 @@ class GeneralLedgerLineOut(BaseModel):
     statement_category: str
     statement_item: str
     statement_detail: str
+    grouping: str
+    is_youth_chaplain_share: str
+    is_missions: str
     bank_account_name: str
+    bank_description: str
     method: str
     amount: float
     check_invoice_name: str
     notes: str
+    is_reimbursement: bool
+    source_file_name: str
+    source_file_link: str
 
 
 class IncomeStatementRowOut(BaseModel):
